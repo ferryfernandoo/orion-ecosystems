@@ -157,7 +157,7 @@ const ChatBot = () => {
   const controls = useAnimation();
 
   // Initialize Google Generative AI
-   const genAI = new GoogleGenerativeAI("AIzaSyDSTgkkROL7mjaGKoD2vnc8l2UptNCbvHk");
+   const genAI = new GoogleGenerativeAI("AIzaSyD62mOmUszYLj_OJG5TT077jkFFzj2ZVd4");
   const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
   // Load AdSense script
   useEffect(() => {
