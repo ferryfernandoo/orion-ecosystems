@@ -148,8 +148,11 @@ const ChatBot = () => {
   const [copiedMessageId, setCopiedMessageId] = useState(null);
   const [memoryImportanceFilter, setMemoryImportanceFilter] = useState('all'); // 'all', 'important', 'normal'
   const [showMemoryDetails, setShowMemoryDetails] = useState(null);
-  const [showAd, setShowAd] = useState(true);
-  const [adTimer, setAdTimer] = useState(0);
+  const [reasonerEnabled, setReasonerEnabled] = useState(false);
+  const [reasoning, setReasoning] = useState('');
+  const [ttsEnabled, setTtsEnabled] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const speechSynthesisRef = useRef(null);
   const messagesEndRef = useRef(null);
   const textareaRef = useRef(null);
   const chatContainerRef = useRef(null);
@@ -159,33 +162,7 @@ const ChatBot = () => {
   // Initialize Google Generative AI
    const genAI = new GoogleGenerativeAI("AIzaSyD62mOmUszYLj_OJG5TT077jkFFzj2ZVd4");
   const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
-  // Load AdSense script
-  useEffect(() => {
-    const script = document.createElement('script');
-    script.async = true;
-    script.src = "https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6822768824603153";
-    script.crossOrigin = "anonymous";
-    document.head.appendChild(script);
-
-    return () => {
-      document.head.removeChild(script);
-    };
-  }, []);
-
-  // Show ad after 10 minutes of usage
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setAdTimer(prev => {
-        if (prev >= 600) { // 10 minutes
-          setShowAd(true);
-          return 0;
-        }
-        return prev + 1;
-      });
-    }, 1000);
-
-    return () => clearInterval(timer);
-  }, []);
+  // No ads
 
   // Enhanced memory system with Indonesian language support
   const loadMemories = useCallback(() => {
@@ -524,6 +501,8 @@ const ChatBot = () => {
     const characters = fullText.split('');
     let displayedText = '';
     
+    const typingSpeed = Math.random() * 10 + 20; // Random typing speed between 20-30ms
+    
     for (let i = 0; i < characters.length; i++) {
       if (abortController?.signal.aborted) break;
       
@@ -763,6 +742,30 @@ const ChatBot = () => {
 
       const startTime = Date.now();
 
+      // If reasoner is enabled, generate reasoning first
+      if (reasonerEnabled) {
+        setReasoning('Analyzing...');
+        const reasoningPrompt = `Analisa permintaan berikut dan berikan proses penalaran:
+        
+        Pesan User: "${trimmedMessage}"
+        
+        1. Apa yang ingin dicapai user?
+        2. Apa implikasi teknis dari permintaan ini?
+        3. Pendekatan apa yang akan diambil?
+        4. Pertimbangan khusus apa yang perlu diperhatikan?
+        
+        Berikan analisis yang ringkas namun mendalam.`;
+
+        try {
+          const reasoningResult = await model.generateContent(reasoningPrompt);
+          const reasoningResponse = await reasoningResult.response.text();
+          setReasoning(reasoningResponse);
+        } catch (error) {
+          console.error("Error generating reasoning:", error);
+          setReasoning("Gagal menghasilkan analisis");
+        }
+      }
+
       // Find relevant memories using AI (now includes context from all rooms)
       const relevantMemories = await findRelevantMemories(trimmedMessage);
       
@@ -811,6 +814,36 @@ and extremely friendly and very human little bit emoticon and get straight to th
         webResearchContent.summary ? '\n\nNote: Incorporate web research results naturally into your response.' : ''
       }`;
 
+      // Generate reasoning if enabled
+      if (reasonerEnabled) {
+        const reasoningPrompt = `Analisa permintaan berikut dan berikan proses penalaran:
+        
+        Pesan User: "${trimmedMessage}"
+        
+        1. Apa yang ingin dicapai user?
+        2. Apa implikasi teknis dari permintaan ini?
+        3. Pendekatan apa yang akan diambil?
+        4. Pertimbangan khusus apa yang perlu diperhatikan?
+        
+        Berikan analisis yang ringkas namun mendalam.`;
+
+        try {
+          const reasoningResult = await model.generateContent(reasoningPrompt);
+          const reasoningResponse = await reasoningResult.response.text();
+          
+          // Add reasoning as a special system message
+          setMessages(prev => [...prev, {
+            id: Date.now() + '-reasoning',
+            text: reasoningResponse,
+            isBot: true,
+            isReasoning: true,
+            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          }]);
+        } catch (error) {
+          console.error("Error generating reasoning:", error);
+        }
+      }
+
       let botResponse;
       if (isProMode) {
         // Get initial response
@@ -827,6 +860,18 @@ and extremely friendly and very human little bit emoticon and get straight to th
       const processedResponse = processSpecialChars(botResponse);
       const duration = Date.now() - startTime;
 
+      // If reasoner is enabled, create a reasoning message first
+      if (reasonerEnabled && reasoning) {
+        setMessages(prev => [...prev, {
+          id: Date.now() + '-reasoning',
+          text: reasoning,
+          isBot: true,
+          isReasoning: true,
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          duration: 0
+        }]);
+      }
+
       // Update the message with final response
       setMessages(prev => prev.map(msg => 
         msg.id === messageId 
@@ -839,6 +884,11 @@ and extremely friendly and very human little bit emoticon and get straight to th
             } 
           : msg
       ));
+
+      // Speak the response if TTS is enabled
+      if (ttsEnabled) {
+        await speakText(botResponse);
+      }
 
       // Type out the message with animation (only in normal mode)
       if (!isProMode) {
@@ -1005,34 +1055,7 @@ and extremely friendly and very human little bit emoticon and get straight to th
 
   return (
     <div className={`flex flex-col h-screen ${themeClasses.bgPrimary} ${themeClasses.textPrimary} relative overflow-hidden transition-colors duration-300`}>
-      {/* Ad Banner (Top) */}
-      {showAd && (
-        <motion.div 
-          initial={{ opacity: 0, y: -50 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -50 }}
-          transition={{ duration: 0.3 }}
-          className={`w-full ${themeClasses.bgSecondary} ${themeClasses.border} p-2 flex justify-center items-center sticky top-0 z-50`}
-        >
-          <div className="text-center text-xs">
-            <p className="mb-1">Dukung kami dengan menonaktifkan AdBlock</p>
-            <div className="w-full max-w-2xl mx-auto">
-              <ins className="adsbygoogle"
-                style={{ display: 'block' }}
-                data-ad-client="ca-pub-6822768824603153"
-                data-ad-slot="1234567890"
-                data-ad-format="auto"
-                data-full-width-responsive="true"></ins>
-            </div>
-            <button 
-              onClick={() => setShowAd(false)}
-              className="mt-1 text-xs text-gray-400 hover:text-gray-600"
-            >
-              Tutup iklan
-            </button>
-          </div>
-        </motion.div>
-      )}
+      {/* No ads */}
 
       {/* Header */}
       <div className={`${themeClasses.bgSecondary} ${themeClasses.border} p-4 flex items-center justify-between sticky top-0 z-10 shadow-sm`}>
@@ -1774,34 +1797,7 @@ and extremely friendly and very human little bit emoticon and get straight to th
         </AnimatePresence>
       </div>
 
-      {/* Ad Banner (Bottom) - Only shown after 10 minutes */}
-      {adTimer >= 600 && (
-        <motion.div 
-          initial={{ opacity: 0, y: 50 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: 50 }}
-          transition={{ duration: 0.3 }}
-          className={`w-full ${themeClasses.bgSecondary} ${themeClasses.border} p-2 flex justify-center items-center sticky bottom-0 z-50`}
-        >
-          <div className="text-center text-xs">
-            <p className="mb-1">Dukung pengembangan dengan menonaktifkan AdBlock</p>
-            <div className="w-full max-w-2xl mx-auto">
-              <ins className="adsbygoogle"
-                style={{ display: 'block' }}
-                data-ad-client="ca-pub-6822768824603153"
-                data-ad-slot="0987654321"
-                data-ad-format="auto"
-                data-full-width-responsive="true"></ins>
-            </div>
-            <button 
-              onClick={() => setAdTimer(0)}
-              className="mt-1 text-xs text-gray-400 hover:text-gray-600"
-            >
-              Tutup iklan
-            </button>
-          </div>
-        </motion.div>
-      )}
+      {/* No ads */}
 
       {/* Prism.js for syntax highlighting */}
       <link 
