@@ -6,10 +6,11 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import { 
   FiCopy, FiSend, FiPlus, FiX, FiImage, FiFile, FiTrash2, 
   FiClock, FiCpu, FiSettings, FiZap, FiStopCircle, FiMessageSquare,
-  FiSun, FiMoon, FiSearch, FiDatabase, FiAward, FiChevronDown, FiGlobe,
-  FiExternalLink, FiCheck, FiInfo, FiStar, FiAlertTriangle
+  FiSun, FiMoon, FiSearch, FiDatabase, FiAward, FiChevronDown, FiChevronUp, FiChevronRight, FiGlobe,
+  FiExternalLink, FiCheck, FiInfo, FiStar, FiAlertTriangle,
+  FiVolume2, FiVolumeX
 } from 'react-icons/fi';
-import { RiSendPlaneFill } from 'react-icons/ri';
+import { RiSendPlaneFill, RiBrainLine } from 'react-icons/ri';
 
 // OCR API integration (using free OCR.space API)
 const extractTextFromImage = async (file) => {
@@ -123,15 +124,162 @@ const scrapeWebsiteContent = async (url) => {
   }
 };
 
+const TypingAnimation = () => (
+  <motion.div 
+    className="flex space-x-2 items-center p-4 rounded-lg bg-blue-50 dark:bg-blue-900/20"
+    initial={{ opacity: 0, y: 10 }}
+    animate={{ opacity: 1, y: 0 }}
+    exit={{ opacity: 0, y: -10 }}
+  >
+    <motion.div
+      className="w-3 h-3 bg-blue-500 rounded-full"
+      animate={{
+        scale: [1, 1.2, 1],
+        opacity: [0.5, 1, 0.5]
+      }}
+      transition={{
+        duration: 1,
+        repeat: Infinity,
+        ease: "easeInOut"
+      }}
+    />
+    <motion.div
+      className="w-3 h-3 bg-blue-500 rounded-full"
+      animate={{
+        scale: [1, 1.2, 1],
+        opacity: [0.5, 1, 0.5]
+      }}
+      transition={{
+        duration: 1,
+        repeat: Infinity,
+        ease: "easeInOut",
+        delay: 0.2
+      }}
+    />
+    <motion.div
+      className="w-3 h-3 bg-blue-500 rounded-full"
+      animate={{
+        scale: [1, 1.2, 1],
+        opacity: [0.5, 1, 0.5]
+      }}
+      transition={{
+        duration: 1,
+        repeat: Infinity,
+        ease: "easeInOut",
+        delay: 0.4
+      }}
+    />
+  </motion.div>
+);
+
+const ChatMessage = ({ message, isUser }) => {
+  const controls = useAnimation();
+  const messageRef = useRef(null);
+  
+  useEffect(() => {
+    if (messageRef.current) {
+      const observer = new IntersectionObserver(
+        ([entry]) => {
+          if (entry.isIntersecting) {
+            controls.start({
+              opacity: 1,
+              y: 0,
+              scale: 1,
+              filter: "blur(0px)",
+              transition: {
+                type: "spring",
+                damping: 20,
+                stiffness: 100,
+              }
+            });
+          }
+        },
+        { threshold: 0.1 }
+      );
+      
+      observer.observe(messageRef.current);
+      return () => observer.disconnect();
+    }
+  }, [controls]);
+
+  return (
+    <motion.div
+      ref={messageRef}
+      initial={{ opacity: 0, y: 50, scale: 0.9, filter: "blur(8px)" }}
+      animate={controls}
+      className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-4`}
+    >
+      <motion.div
+        className={`rounded-lg p-4 max-w-[80%] backdrop-blur-sm ${
+          isUser 
+            ? 'bg-blue-500 text-white bg-opacity-90 ml-auto shadow-blue-500/20' 
+            : 'bg-white dark:bg-gray-800 dark:text-white bg-opacity-75 dark:bg-opacity-50 shadow-lg'
+        }`}
+        whileHover={{ scale: 1.02 }}
+        transition={{ type: "spring", stiffness: 400, damping: 25 }}
+      >
+        {message.isBot && (
+          <div className="flex items-center mb-2">
+            <div className="w-6 h-6 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center mr-2 shadow">
+              <span className="text-xs text-white">AI</span>
+            </div>
+            <span className="text-sm font-medium">Orion</span>
+          </div>
+        )}
+        
+        {message.file ? (
+          <div>
+            <p className={`text-xs mb-1 ${message.isBot ? 'text-gray-500' : 'text-blue-100'}`}>File: {message.file.name}</p>
+            {message.file.type.startsWith('image/') && (
+              <img 
+                src={URL.createObjectURL(message.file)} 
+                alt="Uploaded" 
+                className="mt-1 max-w-full h-auto rounded-lg border border-gray-200 shadow-sm" 
+              />
+            )}
+          </div>
+        ) : (
+          <div className="text-sm whitespace-pre-wrap break-words">
+            {message.text}
+          </div>
+        )}
+
+        {message.reasoner && (
+          <div className="mt-2 text-xs text-gray-500">
+            <details>
+              <summary className="cursor-pointer hover:text-gray-700 dark:hover:text-gray-300">
+                AI Analysis
+              </summary>
+              <div className="mt-2 pl-2 border-l-2 border-gray-300 dark:border-gray-700">
+                {message.reasoner}
+              </div>
+            </details>
+          </div>
+        )}
+      </motion.div>
+    </motion.div>
+  );
+};
+
 const ChatBot = () => {
+  const [showReasonerId, setShowReasonerId] = useState(null);
   const [chatRooms, setChatRooms] = useState([]);
   const [currentRoomId, setCurrentRoomId] = useState(null);
   const [messages, setMessages] = useState([]);
   const [inputMessage, setInputMessage] = useState('');
   const [isBotTyping, setIsBotTyping] = useState(false);
+  const [ttsEnabled, setTtsEnabled] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [reasonerEnabled, setReasonerEnabled] = useState(false);
+  const [reasoning, setReasoning] = useState('');
+  const [suggestedPrompts, setSuggestedPrompts] = useState([]);
+  const [currentPage, setCurrentPage] = useState(1);
+  const messagesPerPage = 50;
+  const maxStoredMessages = 200;
   const [showTemplateButtons, setShowTemplateButtons] = useState(true);
   const [showFileOptions, setShowFileOptions] = useState(false);
   const [pendingFiles, setPendingFiles] = useState([]);
+  const [hideSuggestions, setHideSuggestions] = useState(false);
   const [chatHistory, setChatHistory] = useState([]);
   const [showMemoryPanel, setShowMemoryPanel] = useState(false);
   const [memories, setMemories] = useState([]);
@@ -143,28 +291,47 @@ const ChatBot = () => {
   const [processingSources, setProcessingSources] = useState([]);
   const [autoScroll, setAutoScroll] = useState(true);
   const [showScrollButton, setShowScrollButton] = useState(false);
-  const [searchMode, setSearchMode] = useState(false); // 'none', 'shallow', 'deep'
+  const [searchMode, setSearchMode] = useState(false);
   const [searchResults, setSearchResults] = useState([]);
   const [copiedMessageId, setCopiedMessageId] = useState(null);
-  const [memoryImportanceFilter, setMemoryImportanceFilter] = useState('all'); // 'all', 'important', 'normal'
+  const [memoryImportanceFilter, setMemoryImportanceFilter] = useState('all');
   const [showMemoryDetails, setShowMemoryDetails] = useState(null);
-  const [reasonerEnabled, setReasonerEnabled] = useState(false);
-  const [reasoning, setReasoning] = useState('');
-  const [ttsEnabled, setTtsEnabled] = useState(false);
-  const [isSpeaking, setIsSpeaking] = useState(false);
-  const speechSynthesisRef = useRef(null);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [blurStrength, setBlurStrength] = useState(0);
+  const [showTypingAnimation, setShowTypingAnimation] = useState(false);
+  
   const messagesEndRef = useRef(null);
   const textareaRef = useRef(null);
   const chatContainerRef = useRef(null);
   const messageCountRef = useRef(0);
   const controls = useAnimation();
+  const speechSynthesisRef = useRef(null);
 
-  // Initialize Google Generative AI
-   const genAI = new GoogleGenerativeAI("AIzaSyD62mOmUszYLj_OJG5TT077jkFFzj2ZVd4");
+  const genAI = new GoogleGenerativeAI("AIzaSyD62mOmUszYLj_OJG5TT077jkFFzj2ZVd4");
   const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
-  // No ads
 
-  // Enhanced memory system with Indonesian language support
+  const analyzeWithReasoner = async (message) => {
+    if (!reasonerEnabled) return null;
+    
+    try {
+      const result = await model.generateContent(`
+        Analisa singkat untuk pesan: "${message}"
+
+        Berikan analisis dalam format ringkas:
+        • Maksud: [apa yang user inginkan]
+        • Konteks: [bagaimana ini terhubung dengan percakapan]
+        • Respons yang disarankan: [pendekatan terbaik untuk menjawab]
+
+        Jawab secara singkat dan natural, maksimal 3 kalimat per poin.
+      `);
+      
+      return await result.response.text();
+    } catch (error) {
+      console.error('Reasoner Error:', error);
+      return null;
+    }
+  };
+
   const loadMemories = useCallback(() => {
     const savedMemories = localStorage.getItem('orionMemories');
     if (savedMemories) {
@@ -177,7 +344,6 @@ const ChatBot = () => {
     }
   }, []);
 
-  // Enter fullscreen mode when component mounts
   useEffect(() => {
     const enterFullscreen = () => {
       try {
@@ -191,61 +357,77 @@ const ChatBot = () => {
       }
     };
 
-    // Add animation class to body for smooth transitions
     document.body.classList.add('smooth-transitions');
-    
-    // Enter fullscreen with a slight delay to allow DOM to load
     const fullscreenTimer = setTimeout(enterFullscreen, 300);
     
-    // Cleanup
     return () => {
       clearTimeout(fullscreenTimer);
       document.body.classList.remove('smooth-transitions');
     };
   }, []);
 
-  // Load all data from localStorage
   useEffect(() => {
     loadMemories();
     
-    const savedChatRooms = localStorage.getItem('orionChatRooms');
+    const chunksCount = parseInt(localStorage.getItem('orionChatRoomChunks') || '0');
+    let allRooms = [];
+    for (let i = 0; i < chunksCount; i++) {
+      const chunk = localStorage.getItem(`orionChatRooms_${i}`);
+      if (chunk) {
+        try {
+          const parsedChunk = JSON.parse(chunk);
+          allRooms = [...allRooms, ...parsedChunk];
+        } catch (e) {
+          console.error('Error parsing room chunk:', e);
+        }
+      }
+    }
+    
+    setChatRooms(allRooms);
     const savedCurrentRoom = localStorage.getItem('orionCurrentRoom');
     const savedProMode = localStorage.getItem('orionProMode');
     const savedDarkMode = localStorage.getItem('orionDarkMode');
     
-    if (savedChatRooms) setChatRooms(JSON.parse(savedChatRooms));
+    if (allRooms.length > 0) {
+      setChatRooms(allRooms);
+    }
     if (savedCurrentRoom) {
       setCurrentRoomId(savedCurrentRoom);
-      const room = JSON.parse(savedCurrentRoom);
-      if (room) {
-        setMessages(room.messages || []);
-        setChatHistory(room.history || []);
+      const parsedRoomId = JSON.parse(savedCurrentRoom);
+      const currentRoom = allRooms.find(room => room.id === parsedRoomId);
+      if (currentRoom) {
+        setMessages(currentRoom.messages || []);
+        setChatHistory(currentRoom.history || []);
       }
     }
     if (savedProMode) setIsProMode(savedProMode === 'true');
     if (savedDarkMode) setDarkMode(savedDarkMode === 'true');
     
-    // Create initial room if none exists
-    if (!savedCurrentRoom && (!savedChatRooms || JSON.parse(savedChatRooms).length === 0)) {
+    if (!savedCurrentRoom && allRooms.length === 0) {
       createNewChatRoom();
     }
   }, [loadMemories]);
 
-  // Save current room when messages change
   useEffect(() => {
     if (currentRoomId) {
       const updatedRooms = chatRooms.map(room => 
         room.id === currentRoomId 
-          ? { ...room, messages, history: chatHistory } 
+          ? { ...room, messages: messages.slice(-maxStoredMessages), history: chatHistory } 
           : room
       );
-      setChatRooms(updatedRooms);
-      localStorage.setItem('orionChatRooms', JSON.stringify(updatedRooms));
+      
+      const roomChunks = [];
+      const chunkSize = 50;
+      for (let i = 0; i < updatedRooms.length; i += chunkSize) {
+        const chunk = updatedRooms.slice(i, i + chunkSize);
+        roomChunks.push(chunk);
+        localStorage.setItem(`orionChatRooms_${i/chunkSize}`, JSON.stringify(chunk));
+      }
+      localStorage.setItem('orionChatRoomChunks', roomChunks.length.toString());
       localStorage.setItem('orionCurrentRoom', JSON.stringify(currentRoomId));
     }
   }, [messages, chatHistory, currentRoomId, chatRooms]);
 
-  // Handle scroll behavior
   useEffect(() => {
     const chatContainer = chatContainerRef.current;
     if (!chatContainer) return;
@@ -261,7 +443,6 @@ const ChatBot = () => {
     return () => chatContainer.removeEventListener('scroll', handleScroll);
   }, []);
 
-  // Auto-scroll when new messages arrive
   useEffect(() => {
     if (autoScroll && messages.length > 0) {
       smoothScrollToBottom();
@@ -277,13 +458,11 @@ const ChatBot = () => {
     smoothScrollToBottom();
   };
 
-  // Toggle dark mode
   const toggleDarkMode = () => {
     const newDarkMode = !darkMode;
     setDarkMode(newDarkMode);
     localStorage.setItem('orionDarkMode', newDarkMode.toString());
     
-    // Update Prism theme
     const prismLink = document.getElementById('prism-theme');
     if (prismLink) {
       prismLink.href = newDarkMode 
@@ -291,6 +470,38 @@ const ChatBot = () => {
         : 'https://cdnjs.cloudflare.com/ajax/libs/prism/1.24.1/themes/prism-coy.min.css';
     }
   };
+
+  const generateSuggestions = async (response) => {
+    try {
+      const result = await model.generateContent(`
+        Berdasarkan respons ini: "${response}"
+        Berikan 5 saran prompt singkat (maksimal 3 kata) untuk melanjutkan percakapan.
+        Setiap prompt harus padat dan jelas.
+        Format: ["Prompt1", "Prompt2", "Prompt3", "Prompt4", "Prompt5"]
+        Contoh format yang benar:
+        ["Jelaskan lebih detail", "Beri contoh", "Bandingkan dengan", "Cara implementasi", "Kapan digunakan"]
+      `);
+      return JSON.parse(await result.response.text());
+    } catch (error) {
+      console.error('Error generating suggestions:', error);
+      return [];
+    }
+  };
+
+  const addMessage = useCallback((newMessage) => {
+    setMessages(prev => {
+      const updated = [...prev, newMessage];
+      if (updated.length > maxStoredMessages) {
+        return updated.slice(-maxStoredMessages);
+      }
+      return updated;
+    });
+  }, []);
+
+  const visibleMessages = useMemo(() => {
+    const start = (currentPage - 1) * messagesPerPage;
+    return messages.slice(start, start + messagesPerPage);
+  }, [messages, currentPage, messagesPerPage]);
 
   const createNewChatRoom = () => {
     const newRoom = {
@@ -346,7 +557,7 @@ const ChatBot = () => {
     }
   };
 
-  const createMessageObject = (text, isBot, duration = 0, file = null, sources = []) => ({
+  const createMessageObject = (text, isBot, duration = 0, file = null, sources = [], suggestions = []) => ({
     id: Date.now() + Math.random().toString(36).substr(2, 9),
     text: DOMPurify.sanitize(text),
     isBot,
@@ -354,7 +565,9 @@ const ChatBot = () => {
     duration,
     file,
     sources,
-    isCode: text.includes('```') // Flag for code blocks
+    suggestions,
+    isCode: text.includes('```'),
+    isReasoning: false
   });
 
   const extractTextFromFile = async (file) => {
@@ -375,7 +588,6 @@ const ChatBot = () => {
     return `File content not extractable: ${file.name}`;
   };
 
-  // Enhanced Indonesian-aware summarization
   const summarizeConversation = async (conversation) => {
     try {
       const prompt = `Buat ringkasan sangat singkat (maksimal 1 kalimat) dari percakapan ini dalam bahasa yang sama dengan percakapan. Fokus pada fakta kunci, keputusan, dan detail penting. Hilangkan semua salam dan basa-basi. Berikan juga tingkat kepentingan (1-5, 5 paling penting) berdasarkan:\n
@@ -394,14 +606,12 @@ const ChatBot = () => {
     }
   };
 
-  // Enhanced memory finding with semantic search (Indonesian support)
   const findRelevantMemories = async (query) => {
     if (memories.length === 0) return '';
     
     try {
-      // First try to find exact matches in recent memories
       const recentMemories = memories
-        .slice(0, 20) // Last 20 memories
+        .slice(0, 20)
         .filter(mem => 
           mem.summary.toLowerCase().includes(query.toLowerCase()) || 
           mem.messages.some(msg => msg.text.toLowerCase().includes(query.toLowerCase()))
@@ -415,9 +625,8 @@ const ChatBot = () => {
           .join('\n\n');
       }
       
-      // If no exact matches, use AI to find semantically similar memories
       const memoryTexts = memories
-        .slice(0, 50) // Limit to 50 memories for performance
+        .slice(0, 50)
         .map(m => `ID: ${m.id}\nSummary: ${m.summary}\nTags: ${m.context.tags.join(', ')}\nImportance: ${m.context.importance}`)
         .join('\n\n');
       
@@ -439,7 +648,6 @@ const ChatBot = () => {
     }
   };
 
-  // Enhanced auto-save with context (Indonesian support)
   const autoSaveToMemory = useCallback(async () => {
     if (messages.length === 0 || messageCountRef.current % 3 !== 0) return;
     
@@ -452,7 +660,6 @@ const ChatBot = () => {
       const importance = parseInt(importanceStr) || 1;
       
       if (summary && !summary.includes("tidak bisa")) {
-        // Generate tags in Indonesian for better memory organization
         const tagPrompt = `Beri 2-3 tag pendek dalam Bahasa Indonesia untuk ringkasan ini:\n"${summary}"\n\nTags harus berupa kata benda yang relevan dan dipisahkan koma.`;
         const tagResult = await model.generateContent(tagPrompt);
         const tags = (await tagResult.response.text())
@@ -469,16 +676,15 @@ const ChatBot = () => {
             roomId: currentRoomId,
             tags,
             importance,
-            language: 'indonesia' // Track language of memory
+            language: 'indonesia'
           },
-          embeddings: [] // Would be filled with vector embeddings in a real app
+          embeddings: []
         };
         
         const updatedMemories = [newMemory, ...memories];
         setMemories(updatedMemories);
         localStorage.setItem('orionMemories', JSON.stringify(updatedMemories));
         
-        // Show memory saved notification
         controls.start({
           scale: [1, 1.1, 1],
           transition: { duration: 0.3 }
@@ -497,32 +703,27 @@ const ChatBot = () => {
       return;
     }
     
-    // Split text into chunks for smoother animation
     const characters = fullText.split('');
     let displayedText = '';
     
-    const typingSpeed = Math.random() * 10 + 20; // Random typing speed between 20-30ms
+    const typingSpeed = Math.random() * 10 + 20;
     
     for (let i = 0; i < characters.length; i++) {
       if (abortController?.signal.aborted) break;
       
-      // Add next 5-10 characters at a time (smaller chunks for smoother typing)
       const chunkSize = Math.min(5 + Math.floor(Math.random() * 6), characters.length - i);
       const chunk = characters.slice(i, i + chunkSize).join('');
       displayedText += chunk;
       
-      // Update the message without any blur effect
       callback(displayedText);
       i += chunkSize - 1;
       
-      // Smooth scrolling during typing if auto-scroll is enabled
       if (autoScroll) {
         setTimeout(() => {
           messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         }, 0);
       }
       
-      // Random typing speed for more natural feel
       await new Promise(resolve => setTimeout(resolve, Math.random() * 10 + 20));
     }
     
@@ -542,7 +743,6 @@ const ChatBot = () => {
     for (let i = 0; i < enhancementPrompts.length; i++) {
       if (abortController?.signal.aborted) break;
       
-      // Show processing animation
       setProcessingSources(prev => [
         ...prev,
         {
@@ -562,7 +762,6 @@ const ChatBot = () => {
         console.error(`Error in enhancement step ${i + 1}:`, error);
       }
       
-      // Update progress in UI
       setProcessingSources(prev => 
         prev.map((source, idx) => 
           idx === i 
@@ -590,7 +789,6 @@ const ChatBot = () => {
 
   const performWebResearch = async (query) => {
     try {
-      // Step 1: Perform initial web search
       setProcessingSources(prev => [
         ...prev,
         {
@@ -605,7 +803,6 @@ const ChatBot = () => {
       const searchResults = await performWebSearch(query);
       setSearchResults(searchResults);
       
-      // Step 2: Scrape content from top results
       setProcessingSources(prev => [
         ...prev,
         {
@@ -629,7 +826,6 @@ const ChatBot = () => {
         })
       );
       
-      // Step 3: Summarize findings
       setProcessingSources(prev => [
         ...prev,
         {
@@ -645,7 +841,6 @@ const ChatBot = () => {
         .map(r => `[Sumber: ${r.title} (${r.url}) - ${r.source}]\n${r.content.substring(0, 1000)}...`)
         .join('\n\n');
       
-      // Update processing sources
       setProcessingSources(prev => 
         prev.map(source => 
           source.id.startsWith('search-step') 
@@ -676,12 +871,20 @@ const ChatBot = () => {
     const trimmedMessage = messageText.trim();
     if ((!trimmedMessage && files.length === 0) || isBotTyping) return;
 
+    setIsGenerating(true);
+    setShowTypingAnimation(true);
+    
+    const interval = setInterval(() => {
+      setBlurStrength(prev => (prev + 1) % 5);
+    }, 200);
+    
+    setHideSuggestions(false);
+
     const controller = new AbortController();
     setAbortController(controller);
     const timeoutId = setTimeout(() => controller.abort(), 300000);
 
     try {
-      // Add user message to chat history
       const userMessage = { role: 'user', content: trimmedMessage };
       const updatedHistory = [...chatHistory, userMessage];
       setChatHistory(updatedHistory);
@@ -697,7 +900,6 @@ const ChatBot = () => {
           const fileMessage = createMessageObject(`File: ${file.name}`, false, 0, file);
           setMessages(prev => [...prev, fileMessage]);
           
-          // Extract text from file if possible
           const fileContent = await extractTextFromFile(file);
           const contentMessage = createMessageObject(`Extracted content from ${file.name}:\n${fileContent}`, false);
           setMessages(prev => [...prev, contentMessage]);
@@ -716,7 +918,6 @@ const ChatBot = () => {
         textareaRef.current.style.height = 'auto';
       }
 
-      // Create initial message object for bot response
       const messageId = Date.now().toString();
       currentMessageId.current = messageId;
       
@@ -730,7 +931,6 @@ const ChatBot = () => {
         sources: []
       }]);
 
-      // Show processing animation for Pro Mode
       if (isProMode) {
         setProcessingSources([
           { id: '1', text: 'Menganalisis pertanyaan', icon: <FiSearch />, completed: false, animation: 'pulse' },
@@ -742,19 +942,16 @@ const ChatBot = () => {
 
       const startTime = Date.now();
 
-      // If reasoner is enabled, generate reasoning first
       if (reasonerEnabled) {
-        setReasoning('Analyzing...');
-        const reasoningPrompt = `Analisa permintaan berikut dan berikan proses penalaran:
+        setReasoning('Menganalisis...');
+        const reasoningPrompt = `Analisa singkat:
+        "${trimmedMessage}"
         
-        Pesan User: "${trimmedMessage}"
+        • Maksud:
+        • Konteks:
+        • Saran respons:
         
-        1. Apa yang ingin dicapai user?
-        2. Apa implikasi teknis dari permintaan ini?
-        3. Pendekatan apa yang akan diambil?
-        4. Pertimbangan khusus apa yang perlu diperhatikan?
-        
-        Berikan analisis yang ringkas namun mendalam.`;
+        Berikan analisis ringkas dalam 2-3 kalimat per poin.`;
 
         try {
           const reasoningResult = await model.generateContent(reasoningPrompt);
@@ -762,19 +959,16 @@ const ChatBot = () => {
           setReasoning(reasoningResponse);
         } catch (error) {
           console.error("Error generating reasoning:", error);
-          setReasoning("Gagal menghasilkan analisis");
+          setReasoning("Gagal menganalisis pesan");
         }
       }
 
-      // Find relevant memories using AI (now includes context from all rooms)
       const relevantMemories = await findRelevantMemories(trimmedMessage);
       
-      // Combine chat history into prompt
       const contextMessages = updatedHistory.slice(-15).map(msg => {
         return msg.role === 'user' ? `User: ${msg.content}` : `Orion: ${msg.content}`;
       }).join('\n');
 
-      // Perform web research if in search mode
       let webResearchContent = { summary: '', sources: [] };
       if (searchMode === 'deep') {
         webResearchContent = await performWebResearch(trimmedMessage);
@@ -814,7 +1008,6 @@ and extremely friendly and very human little bit emoticon and get straight to th
         webResearchContent.summary ? '\n\nNote: Incorporate web research results naturally into your response.' : ''
       }`;
 
-      // Generate reasoning if enabled
       if (reasonerEnabled) {
         const reasoningPrompt = `Analisa permintaan berikut dan berikan proses penalaran:
         
@@ -831,7 +1024,6 @@ and extremely friendly and very human little bit emoticon and get straight to th
           const reasoningResult = await model.generateContent(reasoningPrompt);
           const reasoningResponse = await reasoningResult.response.text();
           
-          // Add reasoning as a special system message
           setMessages(prev => [...prev, {
             id: Date.now() + '-reasoning',
             text: reasoningResponse,
@@ -846,11 +1038,9 @@ and extremely friendly and very human little bit emoticon and get straight to th
 
       let botResponse;
       if (isProMode) {
-        // Get initial response
         const initialResult = await model.generateContent(fullPrompt);
         const initialResponse = await initialResult.response.text();
         
-        // Enhance with Pro Mode processing
         botResponse = await enhanceWithProMode(initialResponse, fullPrompt);
       } else {
         const result = await model.generateContent(fullPrompt);
@@ -860,7 +1050,6 @@ and extremely friendly and very human little bit emoticon and get straight to th
       const processedResponse = processSpecialChars(botResponse);
       const duration = Date.now() - startTime;
 
-      // If reasoner is enabled, create a reasoning message first
       if (reasonerEnabled && reasoning) {
         setMessages(prev => [...prev, {
           id: Date.now() + '-reasoning',
@@ -872,7 +1061,30 @@ and extremely friendly and very human little bit emoticon and get straight to th
         }]);
       }
 
-      // Update the message with final response
+      const suggestions = await generateSuggestions(processedResponse);
+
+      if (reasonerEnabled) {
+        const analysisResult = await model.generateContent(`
+          Analisis mendalam untuk: "${trimmedMessage}"
+          1. Konteks & Tujuan: ${relevantMemories ? 'Menggunakan konteks sebelumnya' : 'Percakapan baru'}
+          2. Implikasi: ${messages.length > 0 ? 'Melanjutkan diskusi' : 'Memulai diskusi'}
+          3. Rekomendasi: ${isProMode ? 'Detail komprehensif' : 'Jawaban ringkas'}
+        `);
+        const analysis = await analysisResult.response.text();
+        
+        setMessages(prev => [...prev, {
+          id: Date.now().toString(),
+          text: `🤔 Analisis AI:\n${analysis}`,
+          isBot: true,
+          time: new Date().toLocaleTimeString(),
+          isReasoning: true
+        }]);
+      }
+
+      if (ttsEnabled) {
+        await speakText(processedResponse.replace(/<[^>]*>?/gm, ''));
+      }
+
       setMessages(prev => prev.map(msg => 
         msg.id === messageId 
           ? { 
@@ -880,17 +1092,16 @@ and extremely friendly and very human little bit emoticon and get straight to th
               text: processedResponse, 
               duration,
               sources: webResearchContent.sources,
+              suggestions,
               isCode: processedResponse.includes('```')
             } 
           : msg
       ));
 
-      // Speak the response if TTS is enabled
       if (ttsEnabled) {
         await speakText(botResponse);
       }
 
-      // Type out the message with animation (only in normal mode)
       if (!isProMode) {
         await typeMessage(processedResponse, (typedText) => {
           setMessages(prev => prev.map(msg => 
@@ -899,12 +1110,10 @@ and extremely friendly and very human little bit emoticon and get straight to th
         });
       }
 
-      // Add bot response to chat history
       const botMessage = { role: 'assistant', content: botResponse };
       const newChatHistory = [...updatedHistory, botMessage];
       setChatHistory(newChatHistory);
 
-      // Auto-save to memory every 3 messages
       await autoSaveToMemory();
 
     } catch (error) {
@@ -927,8 +1136,31 @@ and extremely friendly and very human little bit emoticon and get straight to th
     handleSendMessage(templateMessage);
   };
 
+  const speakText = async (text) => {
+    if (!ttsEnabled || isSpeaking) return;
+    
+    try {
+      setIsSpeaking(true);
+      const utterance = new SpeechSynthesisUtterance(text.replace(/<[^>]*>/g, ''));
+      utterance.lang = 'id-ID';
+      utterance.rate = 1.0;
+      utterance.pitch = 1.0;
+      
+      speechSynthesisRef.current = utterance;
+      
+      utterance.onend = () => {
+        setIsSpeaking(false);
+        speechSynthesisRef.current = null;
+      };
+      
+      window.speechSynthesis.speak(utterance);
+    } catch (error) {
+      console.error('TTS Error:', error);
+      setIsSpeaking(false);
+    }
+  };
+
   const processSpecialChars = (text) => {
-    // Process code blocks first
     const codeBlockRegex = /```(\w+)?\n([\s\S]*?)\n```/g;
     const withCodeBlocks = text.replace(codeBlockRegex, (match, language, code) => {
       const cleanCode = code.replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -943,7 +1175,6 @@ and extremely friendly and very human little bit emoticon and get straight to th
       </div>`;
     });
 
-    // Process other markdown
     return withCodeBlocks
       .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
       .replace(/\*(.*?)\*/g, '<em>$1</em>')
@@ -996,7 +1227,6 @@ and extremely friendly and very human little bit emoticon and get straight to th
     return memory.context.importance < 4;
   });
 
-  // Initialize Prism for syntax highlighting
   useEffect(() => {
     const handleCopyClick = (e) => {
       if (e.target.closest('.copy-button')) {
@@ -1010,7 +1240,6 @@ and extremely friendly and very human little bit emoticon and get straight to th
     return () => document.removeEventListener('click', handleCopyClick);
   }, []);
 
-  // Theme classes
   const themeClasses = darkMode ? {
     bgPrimary: 'bg-gray-900',
     bgSecondary: 'bg-gray-800',
@@ -1054,770 +1283,688 @@ and extremely friendly and very human little bit emoticon and get straight to th
   };
 
   return (
-    <div className={`flex flex-col h-screen ${themeClasses.bgPrimary} ${themeClasses.textPrimary} relative overflow-hidden transition-colors duration-300`}>
-      {/* No ads */}
-
-      {/* Header */}
-      <div className={`${themeClasses.bgSecondary} ${themeClasses.border} p-4 flex items-center justify-between sticky top-0 z-10 shadow-sm`}>
-        <div className="flex items-center space-x-3">
-          <button 
-            onClick={() => setShowChatHistory(!showChatHistory)}
-            className={`p-2 rounded-full ${themeClasses.hoverBg} transition-colors`}
-            title="Riwayat Percakapan"
-          >
-            <FiMessageSquare size={18} className={themeClasses.textSecondary} />
-          </button>
-          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-lg">
-            <span className="text-white text-sm font-bold">AI</span>
-          </div>
-          <div>
-            <h2 className="font-semibold text-base">Orion AI</h2>
-            <p className="text-xs flex items-center">
-              {isBotTyping ? (
-                <span className="flex items-center">
-                  <span className="typing-dot"></span>
-                  <span className="typing-dot"></span>
-                  <span className="typing-dot"></span>
-                  <span className="ml-1">Sedang berpikir...</span>
-                </span>
-              ) : (
-                <span className="flex items-center">
-                  <span className="w-2 h-2 bg-green-500 rounded-full mr-1"></span>
-                  Online {isProMode && <span className="ml-1 text-blue-400">(Mode Pro)</span>}
-                </span>
-              )}
-            </p>
-          </div>
-        </div>
-        <div className="flex items-center space-x-2">
-          <button 
-            onClick={toggleDarkMode}
-            className={`p-2 rounded-full transition-colors ${themeClasses.hoverBg}`}
-            title={darkMode ? 'Ganti ke mode terang' : 'Ganti ke mode gelap'}
-          >
-            {darkMode ? <FiSun size={18} className="text-yellow-300" /> : <FiMoon size={18} />}
-          </button>
-          <button 
-            onClick={toggleProMode}
-            className={`p-2 rounded-full transition-all ${
-              isProMode ? 'bg-blue-100 text-blue-600' : themeClasses.hoverBg
-            }`}
-            title={isProMode ? 'Matikan Mode Pro' : 'Aktifkan Mode Pro'}
-          >
-            <FiZap size={18} className={isProMode ? "text-yellow-500" : ""} />
-          </button>
-          <motion.button
-            animate={controls}
-            onClick={() => setShowMemoryPanel(!showMemoryPanel)}
-            className={`p-2 rounded-full transition-colors ${
-              showMemoryPanel ? `${themeClasses.bgTertiary} ${themeClasses.textPrimary}` : themeClasses.hoverBg
-            }`}
-            title="Memori"
-          >
-            <FiCpu size={18} />
-          </motion.button>
-          <button
-            onClick={createNewChatRoom}
-            className={`p-2 rounded-full ${themeClasses.hoverBg} transition-colors`}
-            title="Percakapan Baru"
-          >
-            <FiPlus size={18} />
-          </button>
-        </div>
-      </div>
-
-      {/* Chat History Panel */}
-      {showChatHistory && (
-        <motion.div 
-          initial={{ opacity: 0, x: -20 }}
-          animate={{ opacity: 1, x: 0 }}
-          exit={{ opacity: 0, x: -20 }}
-          transition={{ type: "spring", damping: 25 }}
-          className={`absolute left-4 top-16 ${themeClasses.cardBg} rounded-xl shadow-xl z-20 ${themeClasses.border} w-80`}
-        >
-          <div className={`p-3 ${themeClasses.border} flex justify-between items-center`}>
-            <h4 className="font-medium text-sm flex items-center">
-              <FiMessageSquare className="mr-2" size={14} /> Riwayat Percakapan
-            </h4>
+    <div className="app-wrapper">
+      <div className={`flex flex-col h-screen ${themeClasses.bgPrimary} ${themeClasses.textPrimary} relative overflow-hidden transition-colors duration-300`}>
+        {/* Header */}
+        <div className={`${themeClasses.bgSecondary} ${themeClasses.border} p-4 flex items-center justify-between sticky top-0 z-10 shadow-sm`}>
+          <div className="flex items-center space-x-3">
             <button 
-              onClick={() => setShowChatHistory(false)}
-              className={`p-1 ${themeClasses.textSecondary} hover:${themeClasses.textPrimary}`}
+              onClick={() => setShowChatHistory(!showChatHistory)}
+              className={`p-2 rounded-full ${themeClasses.hoverBg} transition-colors`}
+              title="Riwayat Percakapan"
             >
-              <FiX size={16} />
+              <FiMessageSquare size={18} className={themeClasses.textSecondary} />
+            </button>
+            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-lg">
+              <span className="text-white text-sm font-bold">AI</span>
+            </div>
+            <div>
+              <h2 className="font-semibold text-base">Orion AI</h2>
+              <p className="text-xs flex items-center">
+                {isBotTyping ? (
+                  <span className="flex items-center">
+                    <span className="typing-dot"></span>
+                    <span className="typing-dot"></span>
+                    <span className="typing-dot"></span>
+                    <span className="ml-1">Sedang berpikir...</span>
+                  </span>
+                ) : (
+                  <span className="flex items-center">
+                    <span className="w-2 h-2 bg-green-500 rounded-full mr-1"></span>
+                    Online {isProMode && <span className="ml-1 text-blue-400">(Mode Pro)</span>}
+                  </span>
+                )}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center space-x-2">
+            <button 
+              onClick={toggleDarkMode}
+              className={`p-2 rounded-full transition-colors ${themeClasses.hoverBg}`}
+              title={darkMode ? 'Ganti ke mode terang' : 'Ganti ke mode gelap'}
+            >
+              {darkMode ? <FiSun size={18} className="text-yellow-300" /> : <FiMoon size={18} />}
+            </button>
+            <button 
+              onClick={toggleProMode}
+              className={`p-2 rounded-full transition-all ${
+                isProMode ? 'bg-blue-100 text-blue-600' : themeClasses.hoverBg
+              }`}
+              title={isProMode ? 'Matikan Mode Pro' : 'Aktifkan Mode Pro'}
+            >
+              <FiZap size={18} className={isProMode ? "text-yellow-500" : ""} />
+            </button>
+            <motion.button
+              animate={controls}
+              onClick={() => setShowMemoryPanel(!showMemoryPanel)}
+              className={`p-2 rounded-full transition-colors ${
+                showMemoryPanel ? `${themeClasses.bgTertiary} ${themeClasses.textPrimary}` : themeClasses.hoverBg
+              }`}
+              title="Memori"
+            >
+              <FiCpu size={18} />
+            </motion.button>
+            <button
+              onClick={createNewChatRoom}
+              className={`p-2 rounded-full ${themeClasses.hoverBg} transition-colors`}
+              title="Percakapan Baru"
+            >
+              <FiPlus size={18} />
             </button>
           </div>
-          
-          <div className="max-h-96 overflow-y-auto scrollbar-thin text-sm">
-            {chatRooms.length === 0 ? (
-              <div className="p-4 text-center text-sm">
-                Belum ada riwayat percakapan
-              </div>
-            ) : (
-              <div className={`divide-y ${themeClasses.border}`}>
-                {chatRooms.map((room) => (
-                  <div 
-                    key={room.id} 
-                    className={`p-3 hover:${themeClasses.bgTertiary} transition-colors cursor-pointer group ${room.id === currentRoomId ? `${themeClasses.bgTertiary}` : ''}`}
-                    onClick={() => switchChatRoom(room.id)}
-                  >
-                    <div className="flex justify-between items-start">
-                      <div className="flex-1">
-                        <p className="text-xs font-medium break-words pr-2">
-                          {room.name}
-                        </p>
-                        <p className="text-xs mt-1 text-gray-500">
-                          {new Date(room.createdAt).toLocaleString('id-ID')}
-                        </p>
-                        {room.messages.length > 0 && (
-                          <p className="text-xs mt-1 truncate">
-                            {room.messages[room.messages.length - 1].text.replace(/<[^>]*>?/gm, '').substring(0, 50)}...
-                          </p>
-                        )}
-                      </div>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          deleteChatRoom(room.id);
-                        }}
-                        className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 text-xs transition-opacity"
-                      >
-                        <FiTrash2 size={14} />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </motion.div>
-      )}
-
-      {/* Chat Area */}
-      <div 
-        ref={chatContainerRef}
-        className={`flex-1 overflow-y-auto p-4 space-y-4 scrollbar-thin scrollbar-thumb-gray-500 scrollbar-track-transparent ${themeClasses.bgPrimary}`}
-      >
-        {messages.length === 0 && (
-          <div className="flex flex-col items-center justify-center h-full pb-16">
-            <motion.div 
-              initial={{ scale: 0.8, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              transition={{ duration: 0.4, type: 'spring' }}
-              className="w-20 h-20 mb-6 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-lg"
-            >
-              <span className="text-3xl text-white">AI</span>
-            </motion.div>
-            <motion.h3 
-              initial={{ y: 10, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              transition={{ delay: 0.1, duration: 0.3 }}
-              className="text-2xl font-semibold text-center mb-2"
-            >
-              Halo, saya Orion 😊!
-            </motion.h3>
-            <motion.p 
-              initial={{ y: 10, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              transition={{ delay: 0.2, duration: 0.3 }}
-              className="text-center mb-8 max-w-md text-sm"
-            >
-              Asisten AI Anda dengan memori otomatis. Tanyakan apa saja atau unggah file untuk dianalisis.
-            </motion.p>
-            
-            {showTemplateButtons && (
-              <motion.div 
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 0.3, staggerChildren: 0.1 }}
-                className="grid grid-cols-2 gap-4 w-full max-w-md"
-              >
-                {[
-                  { 
-                    title: "Sapa Orion", 
-                    desc: "Mulai percakapan",
-                    message: "Halo Orion! Apa kabar hari ini?" 
-                  },
-                  { 
-                    title: "Brainstorm ide", 
-                    desc: "Dapatkan saran kreatif",
-                    message: "Berikan beberapa ide kreatif untuk proyek saya tentang..." 
-                  },
-                  { 
-                    title: "Jelaskan sesuatu", 
-                    desc: "Dapatkan penjelasan jelas",
-                    message: "Jelaskan bagaimana machine learning bekerja dengan bahasa sederhana" 
-                  },
-                  { 
-                    title: "Bantuan koding", 
-                    desc: "Debug atau jelaskan kode",
-                    message: "Bantu saya debug kode ini..." 
-                  }
-                ].map((item, index) => (
-                  <motion.button
-                    key={index}
-                    whileHover={{ y: -3, scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={() => handleTemplateButtonClick(item.message)}
-                    className={`${themeClasses.cardBg} hover:${themeClasses.bgTertiary} ${themeClasses.border} rounded-xl p-4 text-sm transition-all hover:shadow-sm text-left`}
-                  >
-                    <span className="font-medium">{item.title}</span>
-                    <p className="text-xs mt-1 text-gray-500">{item.desc}</p>
-                  </motion.button>
-                ))}
-              </motion.div>
-            )}
-          </div>
-        )}
-
-        <div className="space-y-4">
-          <AnimatePresence>
-            {messages.map((message) => (
-              <motion.div
-                key={message.id}
-                initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: -10, scale: 0.95 }}
-                transition={{ 
-                  duration: 0.2, 
-                  ease: "easeOut",
-                  type: "spring",
-                  stiffness: 500,
-                  damping: 30
-                }}
-                className={`flex ${message.isBot ? 'justify-start' : 'justify-end'}`}
-              >
-                <motion.div
-                  whileHover={{ scale: 1.01 }}
-                  className={`max-w-[90%] md:max-w-[80%] ${message.isBot ? 
-                    `${themeClasses.cardBg} ${themeClasses.border}` : 
-                    'bg-gradient-to-br from-blue-600 to-blue-500 text-white'} rounded-2xl p-4 shadow-xs`}
-                >
-                  {message.isBot && (
-                    <div className="flex items-center mb-2">
-                      <div className="w-6 h-6 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center mr-2 shadow">
-                        <span className="text-xs text-white">AI</span>
-                      </div>
-                      <span className="text-sm font-medium">Orion</span>
-                    </div>
-                  )}
-                  
-                  {message.file ? (
-                    <div>
-                      <p className={`text-xs mb-1 ${message.isBot ? themeClasses.textTertiary : 'text-blue-100'}`}>File: {message.file.name}</p>
-                      {message.file.type.startsWith('image/') && (
-                        <img 
-                          src={URL.createObjectURL(message.file)} 
-                          alt="Uploaded" 
-                          className="mt-1 max-w-full h-auto rounded-lg border border-gray-200 shadow-sm" 
-                        />
-                      )}
-                    </div>
-                  ) : (
-                    <div 
-                      className={`text-sm ${message.isBot ? themeClasses.textPrimary : 'text-white'}`}
-                      dangerouslySetInnerHTML={{ __html: message.text }} 
-                    />
-                  )}
-                  
-                  {/* Sources section */}
-                  {message.isBot && message.sources && message.sources.length > 0 && (
-                    <motion.div
-                      initial={{ opacity: 0, height: 0 }}
-                      animate={{ opacity: 1, height: 'auto' }}
-                      transition={{ duration: 0.3 }}
-                      className={`mt-3 pt-3 border-t ${themeClasses.border}`}
-                    >
-                      <p className="text-xs font-medium mb-2">Sumber:</p>
-                      <div className="space-y-2">
-                        {message.sources.map((source, index) => (
-                          <motion.div
-                            key={index}
-                            whileHover={{ x: 2 }}
-                            className="text-xs break-words"
-                          >
-                            <a 
-                              href={source.url} 
-                              target="_blank" 
-                              rel="noopener noreferrer"
-                              className="text-blue-400 hover:underline flex items-center"
-                            >
-                              {source.title} <FiExternalLink className="ml-1" size={10} />
-                            </a>
-                            <p className="text-xs opacity-80 mt-1">{source.content}</p>
-                            {source.source && (
-                              <span className="text-xs text-gray-500">{source.source}</span>
-                            )}
-                          </motion.div>
-                        ))}
-                      </div>
-                    </motion.div>
-                  )}
-                  
-                  <div className="flex items-center justify-between mt-2">
-                    <span className={`text-xs ${message.isBot ? themeClasses.textTertiary : 'text-blue-100'}`}>
-                      {message.time}
-                      {message.isBot && message.duration > 0 && (
-                        <span> • {(message.duration / 1000).toFixed(1)}s</span>
-                      )}
-                    </span>
-                    
-                    <div className="flex items-center space-x-2">
-                      {message.isBot && (
-                        <>
-                          <button
-                            onClick={() => copyToClipboard(message.text.replace(/<[^>]*>?/gm, ''), message.id)}
-                            className="text-xs opacity-60 hover:opacity-100 transition-opacity"
-                            title="Salin ke clipboard"
-                          >
-                            {copiedMessageId === message.id ? (
-                              <FiCheck size={16} className="text-green-500" />
-                            ) : (
-                              <FiCopy size={16} />
-                            )}
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                </motion.div>
-              </motion.div>
-            ))}
-          </AnimatePresence>
-          
-          {/* Processing indicators */}
-          {processingSources.length > 0 && (
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.3 }}
-              className={`${themeClasses.cardBg} ${themeClasses.border} rounded-xl p-4 max-w-[90%] md:max-w-[80%]`}
-            >
-              <div className="flex items-center mb-2">
-                <div className="w-6 h-6 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center mr-2 shadow">
-                  <span className="text-xs text-white">AI</span>
-                </div>
-                <span className="text-sm font-medium">Memproses</span>
-              </div>
-              
-              <div className="space-y-3 mt-3">
-                {processingSources.map((source) => (
-                  <motion.div
-                    key={source.id}
-                    initial={{ opacity: 0, x: -10 }}
-                    animate={{ 
-                      opacity: 1, 
-                      x: 0,
-                      transition: { delay: 0.1 }
-                    }}
-                    className="flex items-center"
-                  >
-                    <motion.div
-                      animate={{
-                        scale: source.animation === 'pulse' ? [1, 1.1, 1] : [1, 1],
-                        x: source.animation === 'wave' ? [0, 2, -2, 0] : [0]
-                      }}
-                      transition={{
-                        duration: source.animation === 'pulse' ? 1 : 0.5,
-                        repeat: Infinity,
-                        ease: "easeInOut"
-                      }}
-                      className={`w-6 h-6 rounded-full flex items-center justify-center mr-3 ${source.completed ? 'bg-green-500' : 'bg-blue-500'}`}
-                    >
-                      {source.completed ? (
-                        <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                        </svg>
-                      ) : (
-                        source.icon
-                      )}
-                    </motion.div>
-                    <span className="text-sm">{source.text}</span>
-                  </motion.div>
-                ))}
-              </div>
-            </motion.div>
-          )}
-          
-          <div ref={messagesEndRef} />
         </div>
-      </div>
 
-      {/* Scroll to bottom button */}
-      {showScrollButton && (
-        <motion.button
-          onClick={scrollToBottomButton}
-          className={`fixed right-6 bottom-24 w-10 h-10 rounded-full ${themeClasses.buttonBg} ${themeClasses.buttonHover} shadow-lg flex items-center justify-center z-10`}
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: 20 }}
-          whileHover={{ scale: 1.1 }}
-          whileTap={{ scale: 0.9 }}
-          title="Scroll ke bawah"
-        >
-          <FiChevronDown size={20} className="text-white" />
-        </motion.button>
-      )}
-
-      {/* Memory Panel */}
-      {showMemoryPanel && (
-        <motion.div 
-          initial={{ opacity: 0, x: 20 }}
-          animate={{ opacity: 1, x: 0 }}
-          exit={{ opacity: 0, x: 20 }}
-          transition={{ type: "spring", damping: 25 }}
-          className={`absolute right-4 top-16 ${themeClasses.cardBg} rounded-xl shadow-xl z-20 ${themeClasses.border} w-80`}
-        >
-          <div className={`p-3 ${themeClasses.border} flex justify-between items-center`}>
-            <h4 className="font-medium text-sm flex items-center">
-              <FiCpu className="mr-2" size={16} /> Konteks Memori
-            </h4>
-            <div className="flex items-center space-x-2">
-              <div className="relative">
-                <select
-                  value={memoryImportanceFilter}
-                  onChange={(e) => setMemoryImportanceFilter(e.target.value)}
-                  className={`text-xs ${themeClasses.bgTertiary} hover:${themeClasses.bgSecondary} px-2 py-1 rounded-lg transition-colors appearance-none pr-6 ${themeClasses.textPrimary}`}
-                >
-                  <option value="all">Semua Memori</option>
-                  <option value="important">Penting</option>
-                  <option value="normal">Normal</option>
-                </select>
-                <FiChevronDown size={12} className="absolute right-2 top-2 pointer-events-none" />
-              </div>
-              <button
-                onClick={autoSaveToMemory}
-                disabled={messages.length === 0}
-                className={`text-xs ${themeClasses.bgTertiary} hover:${themeClasses.bgSecondary} px-2 py-1 rounded-lg transition-colors disabled:opacity-50`}
-              >
-                Ingat
-              </button>
+        {/* Chat History Panel */}
+        {showChatHistory && (
+          <motion.div 
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -20 }}
+            transition={{ type: "spring", damping: 25 }}
+            className={`absolute left-4 top-16 ${themeClasses.cardBg} rounded-xl shadow-xl z-20 ${themeClasses.border} w-80`}
+          >
+            <div className={`p-3 ${themeClasses.border} flex justify-between items-center`}>
+              <h4 className="font-medium text-sm flex items-center">
+                <FiMessageSquare className="mr-2" size={14} /> Riwayat Percakapan
+              </h4>
               <button 
-                onClick={() => setShowMemoryPanel(false)}
+                onClick={() => setShowChatHistory(false)}
                 className={`p-1 ${themeClasses.textSecondary} hover:${themeClasses.textPrimary}`}
               >
                 <FiX size={16} />
               </button>
             </div>
-          </div>
-          
-          <div className="max-h-72 overflow-y-auto scrollbar-thin text-sm">
-            {filteredMemories.length === 0 ? (
-              <div className="p-4 text-center text-sm">
-                Belum ada memori. Konteks penting akan muncul di sini.
-              </div>
-            ) : (
-              <div className={`divide-y ${themeClasses.border}`}>
-                {filteredMemories.map((memory) => (
-                  <div key={memory.id} className={`p-3 hover:${themeClasses.bgTertiary} transition-colors group`}>
-                    <div className="flex justify-between items-start">
-                      <div className="flex-1">
-                        <div className="flex items-start">
-                          <p className="text-xs break-words pr-2">{memory.summary}</p>
-                          {memory.context.importance >= 4 && (
-                            <FiStar className="text-yellow-400 flex-shrink-0 mt-0.5" size={12} />
+            
+            <div className="max-h-96 overflow-y-auto scrollbar-thin text-sm">
+              {chatRooms.length === 0 ? (
+                <div className="p-4 text-center text-sm">
+                  Belum ada riwayat percakapan
+                </div>
+              ) : (
+                <div className={`divide-y ${themeClasses.border}`}>
+                  {chatRooms.map((room) => (
+                    <div 
+                      key={room.id} 
+                      className={`p-3 hover:${themeClasses.bgTertiary} transition-colors cursor-pointer group ${room.id === currentRoomId ? `${themeClasses.bgTertiary}` : ''}`}
+                      onClick={() => switchChatRoom(room.id)}
+                    >
+                      <div className="flex justify-between items-start">
+                        <div className="flex-1">
+                          <p className="text-xs font-medium break-words pr-2">
+                            {room.name}
+                          </p>
+                          <p className="text-xs mt-1 text-gray-500">
+                            {new Date(room.createdAt).toLocaleString('id-ID')}
+                          </p>
+                          {room.messages.length > 0 && (
+                            <p className="text-xs mt-1 truncate">
+                              {room.messages[room.messages.length - 1].text.replace(/<[^>]*>?/gm, '').substring(0, 50)}...
+                            </p>
                           )}
                         </div>
-                        <p className="text-xs mt-1 text-gray-500">{memory.context.date}</p>
-                        {memory.context.tags.length > 0 && (
-                          <div className="flex flex-wrap gap-1 mt-1">
-                            {memory.context.tags.map(tag => (
-                              <span key={tag} className="text-xs bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded-full">
-                                {tag}
-                              </span>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                      <div className="flex space-x-1">
                         <button
-                          onClick={() => setShowMemoryDetails(showMemoryDetails === memory.id ? null : memory.id)}
-                          className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-blue-500 text-xs transition-opacity"
-                          title="Detail"
-                        >
-                          <FiInfo size={14} />
-                        </button>
-                        <button
-                          onClick={() => deleteMemory(memory.id)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            deleteChatRoom(room.id);
+                          }}
                           className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 text-xs transition-opacity"
-                          title="Hapus"
                         >
                           <FiTrash2 size={14} />
                         </button>
                       </div>
                     </div>
-                    
-                    {showMemoryDetails === memory.id && (
-                      <motion.div
-                        initial={{ opacity: 0, height: 0 }}
-                        animate={{ opacity: 1, height: 'auto' }}
-                        exit={{ opacity: 0, height: 0 }}
-                        transition={{ duration: 0.2 }}
-                        className={`mt-2 pt-2 border-t ${themeClasses.border}`}
-                      >
-                        <div className="flex items-center text-xs mb-1">
-                          <span className="font-medium mr-2">Detail:</span>
-                          <span className="flex items-center">
-                            <span className="w-2 h-2 rounded-full bg-blue-500 mr-1"></span>
-                            {memory.context.language === 'indonesia' ? 'Bahasa Indonesia' : 'English'}
-                          </span>
-                          <span className="mx-2">•</span>
-                          <span className="flex items-center">
-                            <FiStar className="mr-1" size={12} />
-                            Penting: {memory.context.importance}/5
-                          </span>
-                        </div>
-                        <div className="text-xs max-h-40 overflow-y-auto bg-gray-900 bg-opacity-20 rounded p-2">
-                          {memory.messages.slice(0, 4).map((msg, idx) => (
-                            <p key={idx} className="mb-1">
-                              <span className="font-medium">{msg.isBot ? 'Orion' : 'Anda'}:</span> {msg.text.replace(/<[^>]*>?/gm, '').substring(0, 100)}...
-                            </p>
-                          ))}
-                          {memory.messages.length > 4 && (
-                            <p className="text-xs text-gray-500">+ {memory.messages.length - 4} pesan lainnya</p>
-                          )}
-                        </div>
-                      </motion.div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </motion.div>
-      )}
-
-      {/* Bottom Input Container */}
-      <div className={`${themeClasses.border} ${themeClasses.bgSecondary} pt-3 pb-4 px-4`}>
-        
-        {/* File Preview */}
-        <AnimatePresence>
-          {pendingFiles.length > 0 && (
-            <motion.div
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: 'auto', opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              transition={{ duration: 0.3, ease: 'easeInOut' }}
-              className={`flex items-center space-x-3 p-3 ${themeClasses.border} overflow-x-auto scrollbar-thin ${themeClasses.bgTertiary} rounded-t-lg`}
-            >
-              {pendingFiles.map((file, index) => (
-                <motion.div
-                  key={index}
-                  initial={{ scale: 0.8, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  transition={{ delay: index * 0.05, type: "spring", stiffness: 300 }}
-                  className="relative flex-shrink-0"
-                >
-                  <div className={`w-16 h-16 flex items-center justify-center ${themeClasses.cardBg} rounded-lg ${themeClasses.border} overflow-hidden shadow-md`}>
-                    {file.type.startsWith('image/') ? (
-                      <img
-                        src={URL.createObjectURL(file)}
-                        alt="Preview"
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <div className="p-1 text-center">
-                        <FiFile size={18} className="mx-auto" />
-                        <p className="text-xs mt-0.5 truncate w-14">{file.name.split('.')[0]}</p>
-                      </div>
-                    )}
-                  </div>
-                  <motion.button
-                    onClick={() => {
-                      const newFiles = [...pendingFiles];
-                      newFiles.splice(index, 1);
-                      setPendingFiles(newFiles);
-                    }}
-                    className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-0.5 hover:bg-red-600 transition-all shadow"
-                    whileHover={{ scale: 1.1 }}
-                    whileTap={{ scale: 0.9 }}
-                  >
-                    <FiX size={10} />
-                  </motion.button>
-                </motion.div>
-              ))}
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* Search Mode Indicator */}
-        {searchMode && (
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3 }}
-            className={`text-xs px-3 py-1.5 mb-2 rounded-full inline-flex items-center ${searchMode === 'deep' ? 'bg-purple-100 text-purple-800' : 'bg-blue-100 text-blue-800'}`}
-          >
-            <FiGlobe size={12} className="mr-1" />
-            {searchMode === 'deep' ? 'Pencarian Web Mendalam' : 'Pencarian Web'} aktif
-            <button 
-              onClick={() => setSearchMode(false)}
-              className="ml-2 text-current hover:text-red-500"
-            >
-              <FiX size={12} />
-            </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </motion.div>
         )}
 
-        {/* Main Input Area */}
-        <div className="relative mt-1">
-          <motion.textarea
-            ref={textareaRef}
-            value={inputMessage}
-            onChange={(e) => {
-              setInputMessage(e.target.value);
-              e.target.style.height = "auto";
-              e.target.style.height = `${Math.min(e.target.scrollHeight, 120)}px`;
-            }}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                handleSendMessage(inputMessage, pendingFiles);
-              }
-            }}
-            placeholder="Ketik pesan Anda..."
-            className={`w-full ${themeClasses.inputBg} ${themeClasses.inputBorder} rounded-xl px-4 py-3 pr-14 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none overflow-hidden transition-all duration-300 text-sm ${themeClasses.inputText}`}
-            rows={1}
-            style={{ minHeight: '52px', maxHeight: '120px' }}
-            whileFocus={{ boxShadow: '0 0 0 3px rgba(59,130,246,0.3)' }}
-            transition={{ type: "spring", stiffness: 100 }}
-          />
-
-          <div className="absolute right-3 bottom-3 flex items-center space-x-1.5">
-            {inputMessage && (
-              <motion.button
-                onClick={() => setInputMessage('')}
-                className={`p-1.5 rounded-full ${themeClasses.hoverBg} transition-all`}
-                whileHover={{ scale: 1.2 }}
-                whileTap={{ scale: 0.9 }}
+        {/* Chat Area */}
+        <motion.div 
+          ref={chatContainerRef}
+          className={`flex-1 overflow-y-auto p-4 space-y-4 scrollbar-thin scrollbar-thumb-gray-500 scrollbar-track-transparent 
+            ${themeClasses.bgPrimary} backdrop-blur-md bg-opacity-80
+            ${isGenerating ? 'filter blur-sm transition-all duration-300' : ''}
+          `}
+          animate={{
+            filter: `blur(${blurStrength}px)`,
+            transition: { duration: 0.3 }
+          }}
+        >
+          {messages.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-full pb-16">
+              <motion.div 
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2 }}
+                className={`${themeClasses.textPrimary} text-center`}
               >
-                <FiX size={16} />
-              </motion.button>
+                <h2 className="text-2xl font-bold mb-4">Selamat datang di Orion</h2>
+                <p className="text-sm opacity-70 mb-8">Tanyakan apa saja, saya siap membantu Anda</p>
+              </motion.div>
+              
+              {showTemplateButtons && (
+                <motion.div 
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.3 }}
+                  className="grid grid-cols-2 gap-4 w-full max-w-md"
+                >
+                  {[
+                    { title: "👋 Sapa", message: "Hai Orion!" },
+                    { title: "💡 Ide", message: "Berikan ide untuk..." },
+                    { title: "❓ Tanya", message: "Jelaskan tentang..." },
+                    { title: "🔧 Koding", message: "Bantu debug..." }
+                  ].map((item, index) => (
+                    <motion.button
+                      key={index}
+                      whileHover={{ y: -3, scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={() => handleTemplateButtonClick(item.message)}
+                      className={`${themeClasses.cardBg} hover:${themeClasses.bgTertiary} ${themeClasses.border} rounded-xl p-4 text-sm transition-all hover:shadow-sm text-left`}
+                    >
+                      <span className="font-medium">{item.title}</span>
+                      <p className="text-xs mt-1 text-gray-500">{item.message}</p>
+                    </motion.button>
+                  ))}
+                </motion.div>
+              )}
+            </div>
+          ) : (
+            <div className="chat-messages">
+              <AnimatePresence mode="popLayout">
+                {messages.map((message) => (
+                  <motion.div key={message.id} className="message-wrapper">
+                    <ChatMessage 
+                      message={message} 
+                      isUser={!message.isBot} 
+                    />
+                  </motion.div>
+                ))}
+              </AnimatePresence>
+            </div>
+          )}
+          <div ref={messagesEndRef} />
+        </motion.div>
+
+        {/* Scroll to bottom button */}
+        {showScrollButton && (
+          <motion.button
+            onClick={scrollToBottomButton}
+            className={`fixed right-6 bottom-24 w-10 h-10 rounded-full ${themeClasses.buttonBg} ${themeClasses.buttonHover} shadow-lg flex items-center justify-center z-10`}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 20 }}
+            whileHover={{ scale: 1.1 }}
+            whileTap={{ scale: 0.9 }}
+            title="Scroll ke bawah"
+          >
+            <FiChevronDown size={20} className="text-white" />
+          </motion.button>
+        )}
+
+        {/* Memory Panel */}
+        {showMemoryPanel && (
+          <motion.div 
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: 20 }}
+            transition={{ type: "spring", damping: 25 }}
+            className={`absolute right-4 top-16 ${themeClasses.cardBg} rounded-xl shadow-xl z-20 ${themeClasses.border} w-80`}
+          >
+            <div className={`p-3 ${themeClasses.border} flex justify-between items-center`}>
+              <h4 className="font-medium text-sm flex items-center">
+                <FiCpu className="mr-2" size={16} /> Konteks Memori
+              </h4>
+              <div className="flex items-center space-x-2">
+                <div className="relative">
+                  <select
+                    value={memoryImportanceFilter}
+                    onChange={(e) => setMemoryImportanceFilter(e.target.value)}
+                    className={`text-xs ${themeClasses.bgTertiary} hover:${themeClasses.bgSecondary} px-2 py-1 rounded-lg transition-colors appearance-none pr-6 ${themeClasses.textPrimary}`}
+                  >
+                    <option value="all">Semua Memori</option>
+                    <option value="important">Penting</option>
+                    <option value="normal">Normal</option>
+                  </select>
+                  <FiChevronDown size={12} className="absolute right-2 top-2 pointer-events-none" />
+                </div>
+                <button
+                  onClick={autoSaveToMemory}
+                  disabled={messages.length === 0}
+                  className={`text-xs ${themeClasses.bgTertiary} hover:${themeClasses.bgSecondary} px-2 py-1 rounded-lg transition-colors disabled:opacity-50`}
+                >
+                  Ingat
+                </button>
+                <button 
+                  onClick={() => setShowMemoryPanel(false)}
+                  className={`p-1 ${themeClasses.textSecondary} hover:${themeClasses.textPrimary}`}
+                >
+                  <FiX size={16} />
+                </button>
+              </div>
+            </div>
+            
+            <div className="max-h-72 overflow-y-auto scrollbar-thin text-sm">
+              {filteredMemories.length === 0 ? (
+                <div className="p-4 text-center text-sm">
+                  Belum ada memori. Konteks penting akan muncul di sini.
+                </div>
+              ) : (
+                <div className={`divide-y ${themeClasses.border}`}>
+                  {filteredMemories.map((memory) => (
+                    <div key={memory.id} className={`p-3 hover:${themeClasses.bgTertiary} transition-colors group`}>
+                      <div className="flex justify-between items-start">
+                        <div className="flex-1">
+                          <div className="flex items-start">
+                            <p className="text-xs break-words pr-2">{memory.summary}</p>
+                            {memory.context.importance >= 4 && (
+                              <FiStar className="text-yellow-400 flex-shrink-0 mt-0.5" size={12} />
+                            )}
+                          </div>
+                          <p className="text-xs mt-1 text-gray-500">{memory.context.date}</p>
+                          {memory.context.tags.length > 0 && (
+                            <div className="flex flex-wrap gap-1 mt-1">
+                              {memory.context.tags.map(tag => (
+                                <span key={tag} className="text-xs bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded-full">
+                                  {tag}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex space-x-1">
+                          <button
+                            onClick={() => setShowMemoryDetails(showMemoryDetails === memory.id ? null : memory.id)}
+                            className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-blue-500 text-xs transition-opacity"
+                            title="Detail"
+                          >
+                            <FiInfo size={14} />
+                          </button>
+                          <button
+                            onClick={() => deleteMemory(memory.id)}
+                            className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 text-xs transition-opacity"
+                            title="Hapus"
+                          >
+                            <FiTrash2 size={14} />
+                          </button>
+                        </div>
+                      </div>
+                      
+                      {showMemoryDetails === memory.id && (
+                        <motion.div
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: 'auto' }}
+                          exit={{ opacity: 0, height: 0 }}
+                          transition={{ duration: 0.2 }}
+                          className={`mt-2 pt-2 border-t ${themeClasses.border}`}
+                        >
+                          <div className="flex items-center text-xs mb-1">
+                            <span className="font-medium mr-2">Detail:</span>
+                            <span className="flex items-center">
+                              <span className="w-2 h-2 rounded-full bg-blue-500 mr-1"></span>
+                              {memory.context.language === 'indonesia' ? 'Bahasa Indonesia' : 'English'}
+                            </span>
+                            <span className="mx-2">•</span>
+                            <span className="flex items-center">
+                              <FiStar className="mr-1" size={12} />
+                              Penting: {memory.context.importance}/5
+                            </span>
+                          </div>
+                          <div className="text-xs max-h-40 overflow-y-auto bg-gray-900 bg-opacity-20 rounded p-2">
+                            {memory.messages.slice(0, 4).map((msg, idx) => (
+                              <p key={idx} className="mb-1">
+                                <span className="font-medium">{msg.isBot ? 'Orion' : 'Anda'}:</span> {msg.text.replace(/<[^>]*>?/gm, '').substring(0, 100)}...
+                              </p>
+                            ))}
+                            {memory.messages.length > 4 && (
+                              <p className="text-xs text-gray-500">+ {memory.messages.length - 4} pesan lainnya</p>
+                            )}
+                          </div>
+                        </motion.div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </motion.div>
+        )}
+
+        {/* Bottom Input Container */}
+        <div className={`${themeClasses.border} ${themeClasses.bgSecondary} pt-3 pb-4 px-4 backdrop-blur-md bg-opacity-80`}>
+          {/* Typing Animation */}
+          <AnimatePresence>
+            {showTypingAnimation && (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                className="mb-4"
+              >
+                <TypingAnimation />
+              </motion.div>
             )}
-
-            <motion.button
-              onClick={toggleSearchMode}
-              className={`p-1.5 rounded-full transition-all ${
-                searchMode === 'deep' ? 'bg-purple-500 text-white' : 
-                searchMode === 'shallow' ? 'bg-blue-500 text-white' : 
-                themeClasses.hoverBg
-              }`}
-              title={searchMode ? `Mode pencarian: ${searchMode}` : 'Aktifkan pencarian web'}
-              whileHover={{ scale: 1.2 }}
-              whileTap={{ scale: 0.9 }}
-            >
-              <FiGlobe size={16} />
-            </motion.button>
-
-            {isBotTyping ? (
-              <motion.button
-                onClick={stopGeneration}
-                className="p-1.5 rounded-full bg-red-500 hover:bg-red-600 text-white transition-all shadow"
-                title="Hentikan generasi"
-                whileHover={{ scale: 1.2 }}
-                whileTap={{ scale: 0.9 }}
+          </AnimatePresence>
+          
+          {/* File Preview */}
+          <AnimatePresence>
+            {pendingFiles.length > 0 && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.3, ease: 'easeInOut' }}
+                className={`flex items-center space-x-3 p-3 ${themeClasses.border} overflow-x-auto scrollbar-thin ${themeClasses.bgTertiary} rounded-t-lg`}
               >
-                <FiStopCircle size={16} />
-              </motion.button>
-            ) : (
-              <>
+                {pendingFiles.map((file, index) => (
+                  <motion.div
+                    key={index}
+                    initial={{ scale: 0.8, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    transition={{ delay: index * 0.05, type: "spring", stiffness: 300 }}
+                    className="relative flex-shrink-0"
+                  >
+                    <div className={`w-16 h-16 flex items-center justify-center ${themeClasses.cardBg} rounded-lg ${themeClasses.border} overflow-hidden shadow-md`}>
+                      {file.type.startsWith('image/') ? (
+                        <img
+                          src={URL.createObjectURL(file)}
+                          alt="Preview"
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="p-1 text-center">
+                          <FiFile size={18} className="mx-auto" />
+                          <p className="text-xs mt-0.5 truncate w-14">{file.name.split('.')[0]}</p>
+                        </div>
+                      )}
+                    </div>
+                    <motion.button
+                      onClick={() => {
+                        const newFiles = [...pendingFiles];
+                        newFiles.splice(index, 1);
+                        setPendingFiles(newFiles);
+                      }}
+                      className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-0.5 hover:bg-red-600 transition-all shadow"
+                      whileHover={{ scale: 1.1 }}
+                      whileTap={{ scale: 0.9 }}
+                    >
+                      <FiX size={10} />
+                    </motion.button>
+                  </motion.div>
+                ))}
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Search Mode Indicator */}
+          {searchMode && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3 }}
+              className={`text-xs px-3 py-1.5 mb-2 rounded-full inline-flex items-center ${searchMode === 'deep' ? 'bg-purple-100 text-purple-800' : 'bg-blue-100 text-blue-800'}`}
+            >
+              <FiGlobe size={12} className="mr-1" />
+              {searchMode === 'deep' ? 'Pencarian Web Mendalam' : 'Pencarian Web'} aktif
+              <button 
+                onClick={() => setSearchMode(false)}
+                className="ml-2 text-current hover:text-red-500"
+              >
+                <FiX size={12} />
+              </button>
+            </motion.div>
+          )}
+
+          {/* Main Input Area */}
+          <div className="flex items-center space-x-2 mb-2">
+            <motion.button
+              whileHover={{ scale: 1.1 }}
+              whileTap={{ scale: 0.9 }}
+              onClick={() => setTtsEnabled(!ttsEnabled)}
+              className={`p-2 rounded-full transition-all ${
+                ttsEnabled 
+                  ? 'bg-blue-500 dark:bg-blue-600 text-white' 
+                  : `${themeClasses.bgTertiary} ${themeClasses.textPrimary}`
+              }`}
+              title={ttsEnabled ? 'Matikan suara' : 'Aktifkan suara'}
+            >
+              {isSpeaking ? <FiVolume2 size={18} /> : <FiVolumeX size={18} />}
+            </motion.button>
+            <motion.button
+              whileHover={{ scale: 1.1 }}
+              whileTap={{ scale: 0.9 }}
+              onClick={() => setReasonerEnabled(!reasonerEnabled)}
+              className={`p-2 rounded-full transition-all ${
+                reasonerEnabled 
+                  ? 'bg-purple-500 dark:bg-purple-600 text-white' 
+                  : `${themeClasses.bgTertiary} ${themeClasses.textPrimary}`
+              }`}
+              title={reasonerEnabled ? 'Matikan analisis' : 'Aktifkan analisis'}
+            >
+              <RiBrainLine size={18} />
+            </motion.button>
+            <motion.button
+              whileHover={{ scale: 1.1 }}
+              whileTap={{ scale: 0.9 }}
+              onClick={() => setHideSuggestions(!hideSuggestions)}
+              className={`p-2 rounded-full transition-all ${
+                !hideSuggestions 
+                  ? 'bg-blue-500 dark:bg-blue-600 text-white' 
+                  : `${themeClasses.bgTertiary} ${themeClasses.textPrimary}`
+              }`}
+              title={hideSuggestions ? 'Tampilkan saran' : 'Sembunyikan saran'}
+            >
+              {hideSuggestions ? <FiChevronDown size={18} /> : <FiChevronUp size={18} />}
+            </motion.button>
+          </div>
+
+          {/* Suggested Prompts */}
+          {messages.length > 0 && messages[messages.length - 1].suggestions && !hideSuggestions && (
+            <div className="relative">
+              <div className="flex space-x-2 mb-3 overflow-x-auto scrollbar-thin pb-2 -mx-4 px-4">
+                {messages[messages.length - 1].suggestions.slice(0, 5).map((suggestion, index) => {
+                  const shortSuggestion = suggestion.split(' ').slice(0, 3).join(' ') + (suggestion.split(' ').length > 3 ? '...' : '');
+                  return (
+                    <motion.button
+                      key={index}
+                      onClick={() => handleSendMessage(suggestion)}
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      className={`${themeClasses.cardBg} ${themeClasses.border} px-3 py-1.5 rounded-full text-sm hover:bg-blue-50 dark:hover:bg-gray-700 hover:text-blue-600 dark:hover:text-blue-400 transition-all duration-200 shadow-sm flex-shrink-0 ${themeClasses.textPrimary}`}
+                      title={suggestion}
+                    >
+                      {shortSuggestion}
+                    </motion.button>
+                  );
+                })}
                 <motion.button
-                  onClick={() => setShowFileOptions(!showFileOptions)}
-                  className={`p-1.5 rounded-full transition-all ${showFileOptions ? `${themeClasses.bgTertiary}` : themeClasses.hoverBg}`}
-                  title="Lampirkan file"
+                  onClick={() => setHideSuggestions(true)}
+                  className={`flex-shrink-0 w-8 h-8 rounded-full ${themeClasses.bgTertiary} flex items-center justify-center hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors ${themeClasses.textPrimary}`}
+                  whileHover={{ scale: 1.1 }}
+                  whileTap={{ scale: 0.9 }}
+                >
+                  <FiChevronDown size={18} />
+                </motion.button>
+              </div>
+            </div>
+          )}
+
+          <motion.div 
+            className="relative mt-1"
+            initial={false}
+            animate={{ 
+              height: textareaRef.current ? Math.min(textareaRef.current.scrollHeight, 120) : 52,
+              scale: isGenerating ? 0.98 : 1
+            }}
+            transition={{ type: "spring", stiffness: 500, damping: 30 }}
+          >
+            <motion.div
+              className="relative w-full"
+              whileHover={{ scale: 1.01 }}
+              whileTap={{ scale: 0.99 }}
+            >
+              <textarea
+                ref={textareaRef}
+                value={inputMessage}
+                onChange={(e) => {
+                  setInputMessage(e.target.value);
+                  e.target.style.height = "auto";
+                  e.target.style.height = `${Math.min(e.target.scrollHeight, 120)}px`;
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSendMessage(inputMessage, pendingFiles);
+                  }
+                }}
+                placeholder="Ketik pesan Anda..."
+                className={`w-full rounded-xl px-4 py-3 pr-14 
+                  focus:outline-none resize-none overflow-hidden
+                  transition-all duration-300 ease-in-out
+                  backdrop-blur-sm bg-opacity-80
+                  shadow-lg dark:shadow-blue-500/20
+                  ${themeClasses.inputBg} ${themeClasses.inputBorder}
+                  border-blue-100 dark:border-blue-500/20
+                  focus:border-blue-500 dark:focus:border-blue-400
+                  placeholder-gray-400 dark:placeholder-gray-500
+                  ${isGenerating ? 'opacity-50' : 'opacity-100'}
+                  ${themeClasses.inputText}
+                `}
+                rows={1}
+                style={{ 
+                  minHeight: '52px',
+                  maxHeight: '120px',
+                }}
+              />
+              <motion.div
+                className="absolute inset-0 rounded-xl pointer-events-none"
+                animate={{ 
+                  boxShadow: inputMessage ? '0 0 20px rgba(59,130,246,0.2)' : 'none',
+                  borderColor: inputMessage ? 'rgba(59,130,246,0.5)' : 'transparent'
+                }}
+                transition={{ duration: 0.3 }}
+              />
+
+              <div className="absolute right-3 bottom-3 flex items-center space-x-1.5">
+                {inputMessage && (
+                  <motion.button
+                    onClick={() => setInputMessage('')}
+                    className={`p-1.5 rounded-full ${themeClasses.hoverBg} transition-all`}
+                    whileHover={{ scale: 1.2 }}
+                    whileTap={{ scale: 0.9 }}
+                  >
+                    <FiX size={16} />
+                  </motion.button>
+                )}
+
+                <motion.button
+                  onClick={toggleSearchMode}
+                  className={`p-1.5 rounded-full transition-all ${
+                    searchMode === 'deep' ? 'bg-purple-500 text-white' : 
+                    searchMode === 'shallow' ? 'bg-blue-500 text-white' : 
+                    themeClasses.hoverBg
+                  }`}
+                  title={searchMode ? `Mode pencarian: ${searchMode}` : 'Aktifkan pencarian web'}
                   whileHover={{ scale: 1.2 }}
                   whileTap={{ scale: 0.9 }}
                 >
-                  <FiPlus size={16} />
+                  <FiGlobe size={16} />
                 </motion.button>
 
-                <motion.button
-                  onClick={() => handleSendMessage(inputMessage, pendingFiles)}
-                  disabled={(!inputMessage.trim() && pendingFiles.length === 0) || isBotTyping}
-                  className={`p-2 rounded-full transition-all duration-300 ${
-                    inputMessage.trim() || pendingFiles.length > 0
-                      ? 'bg-gradient-to-br from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white shadow-md'
-                      : 'text-gray-400 hover:text-gray-500 hover:bg-gray-100'
-                  }`}
-                  whileHover={{
-                    scale: (inputMessage.trim() || pendingFiles.length > 0) ? 1.15 : 1,
-                    rotate: (inputMessage.trim() || pendingFiles.length > 0) ? 6 : 0
-                  }}
-                  whileTap={{ scale: 0.9 }}
-                  title="Kirim pesan"
-                >
-                  <RiSendPlaneFill size={18} />
-                </motion.button>
-              </>
-            )}
-          </div>
-        </div>
+                {isBotTyping ? (
+                  <motion.button
+                    onClick={stopGeneration}
+                    className="p-1.5 rounded-full bg-red-500 hover:bg-red-600 text-white transition-all shadow"
+                    title="Hentikan generasi"
+                    whileHover={{ scale: 1.2 }}
+                    whileTap={{ scale: 0.9 }}
+                  >
+                    <FiStopCircle size={16} />
+                  </motion.button>
+                ) : (
+                  <>
+                    <motion.button
+                      onClick={() => setShowFileOptions(!showFileOptions)}
+                      className={`p-1.5 rounded-full transition-all ${showFileOptions ? `${themeClasses.bgTertiary}` : themeClasses.hoverBg}`}
+                      title="Lampirkan file"
+                      whileHover={{ scale: 1.2 }}
+                      whileTap={{ scale: 0.9 }}
+                    >
+                      <FiPlus size={16} />
+                    </motion.button>
 
-        {/* File Options */}
-        <AnimatePresence>
-          {showFileOptions && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              transition={{ duration: 0.25 }}
-              className="flex space-x-3 pt-3"
-            >
-              <motion.label
-                className={`cursor-pointer p-2 rounded-lg transition-all ${themeClasses.hoverBg}`}
-                whileHover={{ scale: 1.1 }}
-                whileTap={{ scale: 0.95 }}
-                title="Unggah gambar"
-              >
-                <input
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={handleFileUpload}
-                  multiple
-                />
-                <FiImage size={18} />
-              </motion.label>
-              <motion.label
-                className={`cursor-pointer p-2 rounded-lg transition-all ${themeClasses.hoverBg}`}
-                whileHover={{ scale: 1.1 }}
-                whileTap={{ scale: 0.95 }}
-                title="Unggah file"
-              >
-                <input
-                  type="file"
-                  accept=".pdf,.txt,.doc,.docx,.csv"
-                  className="hidden"
-                  onChange={handleFileUpload}
-                  multiple
-                />
-                <FiFile size={18} />
-              </motion.label>
+                    <motion.button
+                      onClick={() => handleSendMessage(inputMessage, pendingFiles)}
+                      disabled={(!inputMessage.trim() && pendingFiles.length === 0) || isBotTyping}
+                      className={`p-2 rounded-full transition-all duration-300 ${
+                        inputMessage.trim() || pendingFiles.length > 0
+                          ? 'bg-gradient-to-br from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white shadow-md'
+                          : 'text-gray-400 hover:text-gray-500 hover:bg-gray-100'
+                      }`}
+                      whileHover={{
+                        scale: (inputMessage.trim() || pendingFiles.length > 0) ? 1.15 : 1,
+                        rotate: (inputMessage.trim() || pendingFiles.length > 0) ? 6 : 0
+                      }}
+                      whileTap={{ scale: 0.9 }}
+                      title="Kirim pesan"
+                    >
+                      <RiSendPlaneFill size={18} />
+                    </motion.button>
+                  </>
+                )}
+              </div>
             </motion.div>
-          )}
-        </AnimatePresence>
+
+            {/* File Options */}
+            <AnimatePresence>
+              {showFileOptions && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  transition={{ duration: 0.25 }}
+                  className="flex space-x-3 pt-3"
+                >
+                  <motion.label
+                    className={`cursor-pointer p-2 rounded-lg transition-all ${themeClasses.hoverBg}`}
+                    whileHover={{ scale: 1.1 }}
+                    whileTap={{ scale: 0.95 }}
+                    title="Unggah gambar"
+                  >
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={handleFileUpload}
+                      multiple
+                    />
+                    <FiImage size={18} />
+                  </motion.label>
+                  <motion.label
+                    className={`cursor-pointer p-2 rounded-lg transition-all ${themeClasses.hoverBg}`}
+                    whileHover={{ scale: 1.1 }}
+                    whileTap={{ scale: 0.95 }}
+                    title="Unggah file"
+                  >
+                    <input
+                      type="file"
+                      accept=".pdf,.txt,.doc,.docx,.csv"
+                      className="hidden"
+                      onChange={handleFileUpload}
+                      multiple
+                    />
+                    <FiFile size={18} />
+                  </motion.label>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </motion.div>
+        </div>
       </div>
 
-      {/* No ads */}
-
-      {/* Prism.js for syntax highlighting */}
-      <link 
-        id="prism-theme"
-        href={darkMode 
-          ? "https://cdnjs.cloudflare.com/ajax/libs/prism/1.24.1/themes/prism-tomorrow.min.css" 
-          : "https://cdnjs.cloudflare.com/ajax/libs/prism/1.24.1/themes/prism-coy.min.css"
-        } 
-        rel="stylesheet" 
-      />
-      <link 
-        href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.24.1/plugins/line-numbers/prism-line-numbers.min.css" 
-        rel="stylesheet" 
-      />
-      <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.24.1/components/prism-core.min.js"></script>
-      <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.24.1/plugins/autoloader/prism-autoloader.min.js"></script>
-      <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.24.1/plugins/line-numbers/prism-line-numbers.min.js"></script>
-      
       <style jsx global>{`
-        /* Typing Dot */
         .typing-dot {
           display: inline-block;
           width: 8px;
@@ -1846,7 +1993,6 @@ and extremely friendly and very human little bit emoticon and get straight to th
           30% { transform: translateY(-3px); }
         }
 
-        /* Code Container */
         .code-container {
           background: ${darkMode ? '#1e293b' : '#f8fafc'};
           border-radius: 12px;
@@ -1933,7 +2079,6 @@ and extremely friendly and very human little bit emoticon and get straight to th
           font-variant-ligatures: contextual;
         }
 
-        /* Notification */
         .copy-notification {
           position: fixed;
           bottom: 24px;
@@ -1959,7 +2104,6 @@ and extremely friendly and very human little bit emoticon and get straight to th
           to { opacity: 0; }
         }
 
-        /* Chat bubbles */
         .chat-bubble {
           padding: 12px 16px;
           margin-bottom: 16px;
@@ -1998,7 +2142,6 @@ and extremely friendly and very human little bit emoticon and get straight to th
           }
         }
 
-        /* Prose styling for messages */
         .prose {
           max-width: 100%;
           font-size: 0.95rem;
