@@ -503,7 +503,7 @@ const ChatBot = () => {
   const controls = useAnimation();
   const speechSynthesisRef = useRef(null);
 
-  const genAI = new GoogleGenerativeAI("AIzaSyB9GeiZXHvcui45w4dWpESnpe3WxDk_wxo");
+  const genAI = new GoogleGenerativeAI("AIzaSyDSTgkkROL7mjaGKoD2vnc8l2UptNCbvHk");
   const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
   const analyzeWithReasoner = async (message) => {
