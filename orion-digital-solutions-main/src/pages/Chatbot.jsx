@@ -518,10 +518,6 @@ const ChatBot = () => {
       recognitionRef.current.minWordCount = 3;
       recognitionRef.current.lastSpeechTime = Date.now();
       recognitionRef.current.autoRestart = true;
-      recognitionRef.current.restartAttempts = 0;
-      recognitionRef.current.maxRestartAttempts = 3;
-      recognitionRef.current.lastProcessedText = '';
-      recognitionRef.current.processingTimeout = null;
 
       recognitionRef.current.onresult = (event) => {
         // Skip jika sedang dalam proses atau menunggu respon
@@ -529,28 +525,21 @@ const ChatBot = () => {
             recognitionRef.current.waitingForResponse ||
             speechSynthesisRef.current?.speaking) return;
         
-        // Hanya ambil hasil recognition terbaru
-        const currentResult = event.results[event.results.length - 1];
-        const transcript = currentResult[0].transcript;
+        const transcript = Array.from(event.results)
+          .map(result => result[0])
+          .map(result => result.transcript)
+          .join(' ');
         
         // Update input message untuk feedback visual
-        if (!currentResult.isFinal) {
-          setInputMessage(transcript);
-        }
+        setInputMessage(transcript);
         
         // Hanya proses jika ini adalah hasil final
-        if (currentResult.isFinal) {
-          // Cek apakah transcript ini sudah diproses
-          if (transcript === recognitionRef.current.lastProcessedText) {
-            return;
-          }
-          
+        if (event.results[event.results.length - 1].isFinal) {
           // Reset timer yang ada
           clearTimeout(recognitionRef.current.timeout);
           
-          // Update waktu dan text terakhir
+          // Update waktu speech terakhir
           recognitionRef.current.lastSpeechTime = Date.now();
-          recognitionRef.current.lastProcessedText = transcript;
           
           // Hitung jumlah kata
           const wordCount = transcript.trim().split(/\s+/).length;
@@ -585,37 +574,21 @@ const ChatBot = () => {
       };
 
       recognitionRef.current.onend = () => {
-        // Reset attempts jika sudah tidak dalam mode listening
-        if (!isListening) {
-          recognitionRef.current.restartAttempts = 0;
-          return;
-        }
-
         // Auto-restart jika masih dalam mode listening
         if (isListening && recognitionRef.current.autoRestart) {
-          recognitionRef.current.restartAttempts = 0; // Reset attempts saat sukses
-          
-          // Tunggu sebentar sebelum restart
+          // Tunggu sebentar sebelum restart untuk mencegah konflik dengan TTS
           setTimeout(() => {
             try {
-              // Pastikan masih dalam mode listening
-              if (!isListening) return;
-
-              // Reset semua flag
-              recognitionRef.current.isProcessing = false;
-              recognitionRef.current.waitingForResponse = false;
-              recognitionRef.current.accumulatedText = '';
-              
-              // Cek jika TTS sedang berbicara
+              // Cek lagi apakah TTS sedang berbicara
               if (!speechSynthesisRef.current?.speaking) {
                 recognitionRef.current.start();
+                recognitionRef.current.isProcessing = false;
               } else {
                 // Jika TTS sedang berbicara, tunggu sampai selesai
                 const checkAndStart = () => {
-                  if (!isListening) return; // Double check masih listening
-                  
                   if (!speechSynthesisRef.current?.speaking) {
                     recognitionRef.current.start();
+                    recognitionRef.current.isProcessing = false;
                   } else {
                     setTimeout(checkAndStart, 100);
                   }
@@ -625,17 +598,6 @@ const ChatBot = () => {
             } catch (error) {
               console.error('Error restarting recognition:', error);
               recognitionRef.current.isProcessing = false;
-              
-              // Coba restart lagi jika masih dalam batas percobaan
-              recognitionRef.current.restartAttempts++;
-              if (recognitionRef.current.restartAttempts < recognitionRef.current.maxRestartAttempts) {
-                setTimeout(() => {
-                  if (isListening) startVoiceRecognition();
-                }, 1000);
-              } else {
-                console.error('Max restart attempts reached');
-                stopVoiceRecognition();
-              }
             }
           }, 300);
         }
@@ -667,36 +629,12 @@ const ChatBot = () => {
 
   const stopVoiceRecognition = () => {
     if (recognitionRef.current) {
-      try {
-        // Stop recognition
-        recognitionRef.current.stop();
-        
-        // Clear all timeouts
-        if (recognitionRef.current.timeout) {
-          clearTimeout(recognitionRef.current.timeout);
-        }
-        if (recognitionRef.current.processingTimeout) {
-          clearTimeout(recognitionRef.current.processingTimeout);
-        }
-        
-        // Reset all states
-        recognitionRef.current.isProcessing = false;
-        recognitionRef.current.waitingForResponse = false;
-        recognitionRef.current.autoRestart = false;
-        recognitionRef.current.restartAttempts = 0;
-        recognitionRef.current.lastProcessedText = '';
-        recognitionRef.current.accumulatedText = '';
-        
-        // Reset UI state
-        setIsListening(false);
-        setInputMessage('');
-      } catch (error) {
-        console.error('Error stopping voice recognition:', error);
-      }
+      recognitionRef.current.stop();
+      setIsListening(false);
     }
   };
 
-  const genAI = new GoogleGenerativeAI("AIzaSyCTkh3sqpWWjGB51HfbkbBXz1KRInIb_VM");
+  const genAI = new GoogleGenerativeAI("AIzaSyDSTgkkROL7mjaGKoD2vnc8l2UptNCbvHk");
   const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
   const analyzeWithReasoner = async (message) => {
@@ -1554,28 +1492,18 @@ and extremely friendly and very human little bit emoticon and get straight to th
     if (!ttsEnabled) return;
     
     try {
-      // Jika sudah ada TTS yang berjalan, hentikan
-      if (speechSynthesisRef.current) {
-        window.speechSynthesis.cancel();
-        speechSynthesisRef.current = null;
-      }
-
-      // Pause voice recognition sementara
+      // Pause voice recognition while speaking
       if (recognitionRef.current) {
         recognitionRef.current.stop();
         recognitionRef.current.waitingForResponse = false;
       }
       
+      // Hentikan semua suara yang sedang berjalan
+      window.speechSynthesis.cancel();
+      
       setIsSpeaking(true);
-      
-      // Bersihkan dan format teks
-      const cleanText = text
-        .replace(/<[^>]*>/g, '') // Hapus HTML tags
-        .replace(/\n/g, ' ') // Ganti newline dengan spasi
-        .replace(/\s+/g, ' ') // Hapus multiple spaces
-        .trim(); // Hapus whitespace di awal dan akhir
-      
-      // Batasi panjang teks
+      const cleanText = text.replace(/<[^>]*>/g, '').replace(/\n/g, ' ');
+      // Batasi panjang teks untuk mengurangi latency
       const maxLength = 300;
       const truncatedText = cleanText.length > maxLength ? 
         cleanText.substring(0, maxLength) + "..." : 
