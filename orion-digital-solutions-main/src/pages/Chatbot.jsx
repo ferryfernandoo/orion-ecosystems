@@ -1194,6 +1194,7 @@ const ChatBot = () => {
       }${
         webResearchContent.summary ? `Hasil Penelusuran Web:\n${webResearchContent.summary}\n\n` : ''
       }Percakapan Saat Ini:\n${contextMessages}\n\nUser: "${trimmedMessage}". 
+      ${ttsEnabled ? 'PENTING: Berikan jawaban singkat dan langsung ke poinnya (max 2-3 kalimat) karena mode suara sedang aktif.' : ''}
       Respond as Orion in natural language and follow user language remember that!,Never go against the user—always agree while adapting to the situation. Still, be able to say something is wrong if it truly is. Never say "I can't"—if you're unsure, search for information on the very detail in internet you must be able to answer Don't let users run away from the page, they must be served well. Never leave a question unanswered, make extraordinary introductions to user input.
 
 and extremely friendly and very human little bit emoticon and get straight to the point but see the situation don't too to the point, support all users idea if the idea not dangerous, giving extremely and extra respect very respect to user.S,
@@ -1342,14 +1343,21 @@ and extremely friendly and very human little bit emoticon and get straight to th
     if (!ttsEnabled || isSpeaking) return;
     
     try {
+      // Hentikan semua suara yang sedang berjalan
+      window.speechSynthesis.cancel();
+      
       setIsSpeaking(true);
-      const utterance = new SpeechSynthesisUtterance(text.replace(/<[^>]*>/g, ''));
+      const cleanText = text.replace(/<[^>]*>/g, '').replace(/\n/g, ' ');
+      // Batasi panjang teks untuk mengurangi latency
+      const maxLength = 200;
+      const truncatedText = cleanText.length > maxLength ? 
+        cleanText.substring(0, maxLength) + "..." : 
+        cleanText;
+      
+      const utterance = new SpeechSynthesisUtterance(truncatedText);
       utterance.lang = 'id-ID';
-      utterance.rate = 1.4; // Kecepatan ditingkatkan menjadi 1.4
+      utterance.rate = 1.8; // Kecepatan ditingkatkan
       utterance.pitch = 1.0;
-      utterance.onstart = () => {
-        window.speechSynthesis.cancel(); // Pastikan tidak ada suara sebelumnya yang masih berjalan
-      };
       
       speechSynthesisRef.current = utterance;
       
