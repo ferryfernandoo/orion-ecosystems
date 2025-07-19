@@ -193,6 +193,23 @@ const formatJSON = (jsonString) => {
 // Function to detect and format code blocks
 const formatMessage = (text) => {
   if (!text) return '';
+
+  // Replace bullet points with context-aware emojis
+  text = text.replace(/^\s*\*\s+(.+)$/gm, (match, content) => {
+    let emoji = '📌'; // default emoji
+    
+    // Choose emoji based on content keywords
+    if (content.toLowerCase().includes('modal')) emoji = '�';
+    else if (content.toLowerCase().includes('belanja') || content.toLowerCase().includes('beli')) emoji = '�';
+    else if (content.toLowerCase().includes('penjualan') || content.toLowerCase().includes('pendapatan')) emoji = '�';
+    else if (content.toLowerCase().includes('pengeluaran')) emoji = '💸';
+    else if (content.toLowerCase().includes('total')) emoji = '📊';
+    else if (content.toLowerCase().includes('laporan')) emoji = '📑';
+    else if (content.toLowerCase().includes('uang')) emoji = '💲';
+    else if (content.toLowerCase().includes('harga')) emoji = '🏷️';
+    
+    return `${emoji} ${content}`;
+  });
   
   // Replace code blocks with syntax highlighting
   text = text.replace(/```(\w+)?\n([\s\S]*?)```/g, (match, language, code) => {
@@ -208,7 +225,7 @@ const formatMessage = (text) => {
   });
 
   // Format tables if they exist in markdown format
-  text = text.replace(/\|.*\|/g, (table) => {
+  text = text.replace(/(\|.*\|\n)+/g, (table) => {
     const rows = table.split('\n').filter(row => row.trim());
     if (rows.length < 2) return table;
 
@@ -2305,36 +2322,70 @@ and extremely friendly and very human little bit emoticon and get straight to th
         }
 
         .table-container {
-          margin: 1em 0;
+          margin: 1.5em 0;
           overflow-x: auto;
-          border-radius: 8px;
+          border-radius: 12px;
           border: 1px solid ${darkMode ? '#334155' : '#e2e8f0'};
+          box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+          background: ${darkMode ? '#1e293b' : '#ffffff'};
         }
 
         .markdown-table {
           width: 100%;
-          border-collapse: collapse;
-          font-size: 0.9em;
+          border-collapse: separate;
+          border-spacing: 0;
+          font-size: 0.95em;
           overflow: hidden;
         }
 
         .markdown-table th,
         .markdown-table td {
-          padding: 12px 16px;
-          border: 1px solid ${darkMode ? '#334155' : '#e2e8f0'};
+          padding: 16px;
+          border-bottom: 1px solid ${darkMode ? '#334155' : '#e2e8f0'};
+          border-right: 1px solid ${darkMode ? '#334155' : '#e2e8f0'};
+        }
+
+        .markdown-table th:last-child,
+        .markdown-table td:last-child {
+          border-right: none;
+        }
+
+        .markdown-table tbody tr:last-child td {
+          border-bottom: none;
         }
 
         .markdown-table thead {
-          background: ${darkMode ? '#1e293b' : '#f8fafc'};
+          background: ${darkMode ? '#0f172a' : '#f8fafc'};
+        }
+
+        .markdown-table th {
           font-weight: 600;
+          text-transform: uppercase;
+          font-size: 0.85em;
+          letter-spacing: 0.05em;
+          color: ${darkMode ? '#94a3b8' : '#475569'};
+          padding: 12px 16px;
+        }
+
+        .markdown-table tbody tr {
+          background: ${darkMode ? '#1e293b' : '#ffffff'};
+          transition: all 0.2s ease;
         }
 
         .markdown-table tbody tr:nth-child(even) {
-          background: ${darkMode ? 'rgba(30, 41, 59, 0.5)' : 'rgba(248, 250, 252, 0.5)'};
+          background: ${darkMode ? '#1e293b' : '#f8fafc'};
         }
 
         .markdown-table tbody tr:hover {
-          background: ${darkMode ? 'rgba(30, 41, 59, 0.8)' : 'rgba(248, 250, 252, 0.8)'};
+          background: ${darkMode ? '#334155' : '#f1f5f9'};
+        }
+
+        .markdown-table td {
+          transition: all 0.2s ease;
+        }
+
+        .markdown-table tbody tr:hover td {
+          color: ${darkMode ? '#f8fafc' : '#1e293b'};
         }
 
         .prose hr {
