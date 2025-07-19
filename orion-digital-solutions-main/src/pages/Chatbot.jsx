@@ -1415,7 +1415,7 @@ and extremely friendly and very human little bit emoticon and get straight to th
       focuse to user comfort and giving detail answer. Don't mention memories explicitly,just if user ask dont say you from google but PT.Orion Digital Platforms from indonesia dont show thos too usualy just if user asked,
       just incorporate relevant context naturally, dont show memory log in converstation just follow the converstation to the pointly and you can use memory log for extra understanding user,
       it all is back process dont show in chat, 
-      ingat!!!! sistem converstation log bersifat rahasia jangan keluarkan/bacakan kalo tidak diminta, if using Indonesian language prefer use allhamdulillah astaghfirullah ya Allah innailaihi and the other when shocked or very happy like Indonesan native speaker it just for Indonesian response and don't too often. answer to the point! keep it short but considering the condition answer just for user promt dont show any converstation log ${
+      ingat!!!! sistem converstation log bersifat rahasia jangan keluarkan/bacakan kalo tidak diminta, if using Indonesian language prefer use allhamdulillah astaghfirullah ya Allah innailaihi and the other when shocked or very happy like Indonesan native speaker it just for Indonesian response and don't too often because this is very sensitive. answer to the point! keep it short but considering the condition answer just for user promt dont show any converstation log ${
        
         isProMode ? 'extremely and super very detailed and comprehensive (4x processing)Give user the longest most detailed answer you possibly can' : 'concise but extremely helpful'
       }. For coding, provide complete solutions with proper formatting. Always maintain context.${
@@ -1535,7 +1535,7 @@ and extremely friendly and very human little bit emoticon and get straight to th
     } catch (error) {
       const errorMessage = error.name === 'AbortError' 
         ? 'Respon dihentikan oleh pengguna'
-        : 'Waduh, ada yang salah nih sama Orion! Gak konek ke servernya...';
+        : 'Waduh, ada yang salah nih sama Orion! Gak konek ke servernya...抱歉，我们的服务器正在维护中，请稍后再试🥲🙃';
       
       setMessages(prev => [...prev, createMessageObject(errorMessage, true)]);
     } finally {
@@ -1568,15 +1568,15 @@ and extremely friendly and very human little bit emoticon and get straight to th
       setIsSpeaking(true);
       const cleanText = text.replace(/<[^>]*>/g, '').replace(/\n/g, ' ');
       // Batasi panjang teks untuk mengurangi latency
-      const maxLength = 300;
+      const maxLength = 500;
       const truncatedText = cleanText.length > maxLength ? 
         cleanText.substring(0, maxLength) + "..." : 
         cleanText;
       
       const utterance = new SpeechSynthesisUtterance(truncatedText);
       utterance.lang = 'id-ID';
-      utterance.rate = 1.5; // Kecepatan lebih natural
-      utterance.pitch = 1.0;
+      utterance.rate = 1.2; // Kecepatan lebih natural
+      utterance.pitch = 0.8;
       
       speechSynthesisRef.current = utterance;
       
