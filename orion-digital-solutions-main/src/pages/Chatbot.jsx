@@ -512,54 +512,103 @@ const ChatBot = () => {
       recognitionRef.current.interimResults = true;
       recognitionRef.current.lang = 'id-ID';
 
+      // State untuk tracking
+      recognitionRef.current.isProcessing = false;
+      recognitionRef.current.accumulatedText = '';
+      recognitionRef.current.minWordCount = 3;
+      recognitionRef.current.lastSpeechTime = Date.now();
+      recognitionRef.current.autoRestart = true;
+
       recognitionRef.current.onresult = (event) => {
+        // Jangan proses jika sedang TTS berbicara
+        if (speechSynthesisRef.current?.speaking) return;
+        
         const transcript = Array.from(event.results)
           .map(result => result[0])
           .map(result => result.transcript)
-          .join('');
+          .join(' ');
         
+        // Update accumulated text and input message
+        recognitionRef.current.accumulatedText = transcript;
         setInputMessage(transcript);
         
         // Jika hasil final
         if (event.results[event.results.length - 1].isFinal) {
-          // Deteksi jeda bicara (1.5 detik)
+          recognitionRef.current.lastSpeechTime = Date.now();
+          
+          // Reset timer setiap kali ada perubahan transcript
           clearTimeout(recognitionRef.current.timeout);
+          
+          // Hitung jumlah kata
+          const wordCount = transcript.trim().split(/\s+/).length;
+          
+          // Tunggu lebih lama (2.5 detik) sebelum mengirim
           recognitionRef.current.timeout = setTimeout(() => {
-            handleSendMessage(transcript);
-            // Restart recognition untuk tetap standby
-            try {
-              recognitionRef.current.stop();
-              setTimeout(() => {
-                if (isListening) {
-                  recognitionRef.current.start();
-                }
-              }, 100);
-            } catch (error) {
-              console.error('Error restarting recognition:', error);
+            // Cek apakah sudah cukup kata dan tidak ada suara baru
+            if (wordCount >= recognitionRef.current.minWordCount && 
+                Date.now() - recognitionRef.current.lastSpeechTime >= 1500) {
+              
+              recognitionRef.current.isProcessing = true;
+              handleSendMessage(transcript);
+              
+              // Reset state
+              recognitionRef.current.accumulatedText = '';
+              setInputMessage('');
+              
+              // Pause recognition sementara selama AI memproses
+              try {
+                recognitionRef.current.stop();
+                recognitionRef.current.autoRestart = true;  // Set flag untuk restart otomatis
+              } catch (error) {
+                console.error('Error pausing recognition:', error);
+              }
             }
-          }, 1500);
+          }, 2500);
         }
       };
 
       recognitionRef.current.onend = () => {
-        // Restart jika masih dalam mode listening
-        if (isListening) {
-          try {
-            recognitionRef.current.start();
-          } catch (error) {
-            console.error('Error restarting recognition:', error);
-          }
+        // Auto-restart jika masih dalam mode listening
+        if (isListening && recognitionRef.current.autoRestart) {
+          // Tunggu sebentar sebelum restart untuk mencegah konflik dengan TTS
+          setTimeout(() => {
+            try {
+              // Cek lagi apakah TTS sedang berbicara
+              if (!speechSynthesisRef.current?.speaking) {
+                recognitionRef.current.start();
+                recognitionRef.current.isProcessing = false;
+              } else {
+                // Jika TTS sedang berbicara, tunggu sampai selesai
+                const checkAndStart = () => {
+                  if (!speechSynthesisRef.current?.speaking) {
+                    recognitionRef.current.start();
+                    recognitionRef.current.isProcessing = false;
+                  } else {
+                    setTimeout(checkAndStart, 100);
+                  }
+                };
+                setTimeout(checkAndStart, 100);
+              }
+            } catch (error) {
+              console.error('Error restarting recognition:', error);
+              recognitionRef.current.isProcessing = false;
+            }
+          }, 300);
         }
       };
 
       recognitionRef.current.onerror = (event) => {
         if (event.error === 'no-speech') {
-          // Ignore no-speech error dan tetap standby
+          // Reset processing state dan restart
+          recognitionRef.current.isProcessing = false;
+          recognitionRef.current.autoRestart = true;
           return;
         }
         console.error('Voice recognition error:', event.error);
         if (event.error === 'network' || event.error === 'service-not-allowed') {
           stopVoiceRecognition();
+          recognitionRef.current.isProcessing = false;
+          recognitionRef.current.autoRestart = false;
         }
       };
     }
@@ -1143,11 +1192,14 @@ const ChatBot = () => {
     const trimmedMessage = messageText.trim();
     if ((!trimmedMessage && files.length === 0) || isBotTyping) return;
 
+    // Pause voice recognition while processing
+    if (recognitionRef.current) {
+      recognitionRef.current.stop();
+      recognitionRef.current.autoRestart = true;
+    }
+
     setIsGenerating(true);
     setShowTypingAnimation(true);
-    
-
-    
     setHideSuggestions(false);
 
     const controller = new AbortController();
@@ -1189,6 +1241,32 @@ const ChatBot = () => {
         setIsBotTyping(false);
         setShowTypingAnimation(false);
         setBlurStrength(0);
+
+        // Restart voice recognition setelah AI selesai menjawab
+        if (recognitionRef.current && isListening) {
+          setTimeout(() => {
+            try {
+              // Pastikan TTS sudah selesai berbicara
+              if (!speechSynthesisRef.current?.speaking) {
+                recognitionRef.current.start();
+                recognitionRef.current.isProcessing = false;
+              } else {
+                // Tunggu sampai TTS selesai
+                const checkAndStart = () => {
+                  if (!speechSynthesisRef.current?.speaking) {
+                    recognitionRef.current.start();
+                    recognitionRef.current.isProcessing = false;
+                  } else {
+                    setTimeout(checkAndStart, 100);
+                  }
+                };
+                setTimeout(checkAndStart, 100);
+              }
+            } catch (error) {
+              console.error('Error restarting recognition after response:', error);
+            }
+          }, 500); // Tunggu setengah detik sebelum restart
+        }
       };
 
       if (textareaRef.current) {
