@@ -191,12 +191,39 @@ const formatJSON = (jsonString) => {
 };
 
 // Function to detect and format code blocks
+const getContextEmoji = (content) => {
+  const contentLower = content.toLowerCase();
+  
+  // Health & Wellness
+  if (contentLower.includes('kesehatan')) return '💪';
+  if (contentLower.includes('vitamin')) return '💊';
+  if (contentLower.includes('mata')) return '👁️';
+  if (contentLower.includes('kulit')) return '✨';
+  if (contentLower.includes('pencernaan')) return '🌿';
+  if (contentLower.includes('kanker')) return '🎗️';
+  if (contentLower.includes('nutrisi')) return '🥗';
+  
+  // Food & Diet
+  if (contentLower.includes('makanan')) return '🍽️';
+  if (contentLower.includes('buah')) return '🍎';
+  if (contentLower.includes('sayur')) return '🥬';
+  if (contentLower.includes('diet')) return '🥗';
+  
+  // Benefits & Improvements
+  if (contentLower.includes('manfaat')) return '✨';
+  if (contentLower.includes('meningkatkan')) return '📈';
+  if (contentLower.includes('membantu')) return '🤝';
+  if (contentLower.includes('mencegah')) return '🛡️';
+  
+  return '📌'; // default emoji
+};
+
 const formatMessage = (text) => {
   if (!text) return '';
 
   // Replace bullet points with context-aware emojis
   text = text.replace(/^\s*\*\s+(.+)$/gm, (match, content) => {
-    let emoji = '📌'; // default emoji
+    const emoji = getContextEmoji(content);
     
     // Choose emoji based on content keywords
     if (content.toLowerCase().includes('modal')) emoji = '�';
@@ -224,16 +251,34 @@ const formatMessage = (text) => {
     </div>`;
   });
 
+  // Check if it's an ASCII table
+  if (text.includes('+---') || text.includes('+-+-')) {
+    return `<div class="ascii-table-container"><pre class="ascii-table">${text}</pre></div>`;
+  }
+
   // Format tables if they exist in markdown format
   text = text.replace(/(\|.*\|\n)+/g, (table) => {
-    const rows = table.split('\n').filter(row => row.trim());
+    const rows = table.split('\n').filter(row => row.trim() && row.includes('|'));
     if (rows.length < 2) return table;
 
-    const headers = rows[0].split('|').filter(cell => cell.trim());
-    const alignments = rows[1].split('|').filter(cell => cell.trim());
-    const dataRows = rows.slice(2);
+    // Clean up and normalize the table data
+    const processedRows = rows.map(row => {
+      return row
+        .split('|')
+        .map(cell => cell.trim())
+        .filter(cell => cell !== '');
+    });
 
-    let tableHtml = '<div class="table-container"><table class="markdown-table">';
+    const headers = processedRows[0];
+    const alignments = processedRows[1]?.map(cell => {
+      if (cell.startsWith(':') && cell.endsWith(':')) return 'center';
+      if (cell.endsWith(':')) return 'right';
+      return 'left';
+    }) || headers.map(() => 'left');
+
+    const dataRows = processedRows.slice(processedRows[1]?.every(cell => cell.includes('-')) ? 2 : 1);
+
+    let tableHtml = '<div class="table-container"><div class="table-wrapper"><table class="markdown-table">';
     
     // Headers
     tableHtml += '<thead><tr>';
@@ -262,9 +307,45 @@ const formatMessage = (text) => {
     return tableHtml;
   });
 
-  // Format JSON if detected
+  // Format JSON if detected and convert to table if possible
   text = text.replace(/```json\n([\s\S]*?)```/g, (match, json) => {
     try {
+      const parsed = JSON.parse(json);
+      
+      // Check if JSON is an array of objects that can be converted to a table
+      if (Array.isArray(parsed) && parsed.length > 0 && typeof parsed[0] === 'object') {
+        const headers = Object.keys(parsed[0]);
+        
+        // Create table headers
+        let tableHtml = '<div class="table-container"><div class="table-wrapper">';
+        tableHtml += '<div class="table-title">Data Table</div>';
+        tableHtml += '<table class="markdown-table">';
+        tableHtml += '<thead><tr>';
+        headers.forEach(header => {
+          const formattedHeader = header
+            .split('_')
+            .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+            .join(' ');
+          tableHtml += `<th>${formattedHeader}</th>`;
+        });
+        tableHtml += '</tr></thead><tbody>';
+
+        // Create table rows
+        parsed.forEach(row => {
+          tableHtml += '<tr>';
+          headers.forEach(header => {
+            const value = row[header];
+            const cellContent = value === null || value === undefined ? '-' : value.toString();
+            tableHtml += `<td>${cellContent}</td>`;
+          });
+          tableHtml += '</tr>';
+        });
+
+        tableHtml += '</tbody></table></div></div>';
+        return tableHtml;
+      }
+
+      // If not a table-like JSON, format as regular JSON code block
       const formatted = formatJSON(json);
       return `<div class="code-container">
         <div class="code-toolbar">
@@ -1264,8 +1345,11 @@ and extremely friendly and very human little bit emoticon and get straight to th
       setIsSpeaking(true);
       const utterance = new SpeechSynthesisUtterance(text.replace(/<[^>]*>/g, ''));
       utterance.lang = 'id-ID';
-      utterance.rate = 1.0;
+      utterance.rate = 1.4; // Kecepatan ditingkatkan menjadi 1.4
       utterance.pitch = 1.0;
+      utterance.onstart = () => {
+        window.speechSynthesis.cancel(); // Pastikan tidak ada suara sebelumnya yang masih berjalan
+      };
       
       speechSynthesisRef.current = utterance;
       
@@ -2215,14 +2299,13 @@ and extremely friendly and very human little bit emoticon and get straight to th
         }
 
         .chat-bubble {
-          padding: 12px 16px;
-          margin-bottom: 16px;
-          border-radius: 16px;
-          max-width: 85%;
+          padding: 20px 24px;
+          margin-bottom: 20px;
+          border-radius: 12px;
           word-wrap: break-word;
           animation: fadeInUp 0.3s ease;
-          box-shadow: 0 4px 10px rgba(0,0,0,0.05);
-          transition: transform 0.3s ease, background-color 0.2s ease;
+          box-shadow: 0 4px 15px rgba(0,0,0,0.08);
+          transition: all 0.3s ease;
         }
 
         .chat-bubble.user {
@@ -2230,15 +2313,19 @@ and extremely friendly and very human little bit emoticon and get straight to th
           background-color: ${darkMode ? '#3b82f6' : '#dbeafe'};
           color: ${darkMode ? '#f8fafc' : '#1e3a8a'};
           margin-left: auto;
-          margin-right: 8px;
+          margin-right: 0;
+          max-width: 85%;
+          border-radius: 12px 12px 0 12px;
         }
 
         .chat-bubble.bot {
-          align-self: flex-start;
-          background-color: ${darkMode ? '#1e293b' : '#f1f5f9'};
-          color: ${darkMode ? '#e2e8f0' : '#334155'};
-          margin-right: auto;
-          margin-left: 8px;
+          align-self: stretch;
+          background-color: ${darkMode ? '#0f172a' : '#f1f5f9'};
+          color: ${darkMode ? '#f1f5f9' : '#334155'};
+          margin: 0;
+          width: 100%;
+          border: 1px solid ${darkMode ? '#1e293b' : 'transparent'};
+          border-radius: 12px;
         }
 
         @keyframes fadeInUp {
@@ -2250,6 +2337,43 @@ and extremely friendly and very human little bit emoticon and get straight to th
             opacity: 1;
             transform: translateY(0);
           }
+        }
+
+        .chat-bubble.bot:hover {
+          background-color: ${darkMode ? '#1e293b' : '#f8fafc'};
+          transform: translateY(-1px);
+          box-shadow: 0 8px 24px rgba(0,0,0,${darkMode ? '0.4' : '0.12'});
+        }
+
+        .chat-bubble.bot::before {
+          content: '';
+          position: absolute;
+          top: 0;
+          left: 0;
+          right: 0;
+          height: 2px;
+          background: linear-gradient(to right, 
+            ${darkMode ? 'rgba(59, 130, 246, 0.6)' : 'rgba(59, 130, 246, 0.3)'}, 
+            transparent 80%
+          );
+        }
+
+        .chat-bubble.bot::after {
+          content: '';
+          position: absolute;
+          bottom: 0;
+          left: 0;
+          right: 0;
+          height: 1px;
+          background: linear-gradient(to left, 
+            ${darkMode ? 'rgba(59, 130, 246, 0.3)' : 'rgba(59, 130, 246, 0.15)'}, 
+            transparent 80%
+          );
+        }
+
+        .chat-messages {
+          padding: 0;
+          width: 100%;
         }
 
         .prose {
@@ -2322,12 +2446,40 @@ and extremely friendly and very human little bit emoticon and get straight to th
         }
 
         .table-container {
-          margin: 1.5em 0;
-          overflow-x: auto;
-          border-radius: 12px;
-          border: 1px solid ${darkMode ? '#334155' : '#e2e8f0'};
-          box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+          margin: 2em 0;
           background: ${darkMode ? '#1e293b' : '#ffffff'};
+          border-radius: 16px;
+          box-shadow: ${darkMode ? 
+            '0 8px 32px rgba(0, 0, 0, 0.4)' : 
+            '0 8px 32px rgba(0, 0, 0, 0.1)'};
+          overflow: hidden;
+          border: 1px solid ${darkMode ? '#334155' : '#e2e8f0'};
+        }
+
+        .table-wrapper {
+          margin: 0;
+          padding: 1.5rem;
+          overflow-x: auto;
+          background: ${darkMode ? 
+            'linear-gradient(to right, #1e293b, #0f172a)' : 
+            'linear-gradient(to right, #ffffff, #f8fafc)'};
+        }
+
+        .table-title {
+          font-size: 1.1em;
+          font-weight: 600;
+          margin-bottom: 1rem;
+          color: ${darkMode ? '#60a5fa' : '#2563eb'};
+          padding-bottom: 0.5rem;
+          border-bottom: 2px solid ${darkMode ? '#334155' : '#e2e8f0'};
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+        }
+
+        .table-title::before {
+          content: '📊';
+          font-size: 1.2em;
         }
 
         .markdown-table {
@@ -2335,14 +2487,30 @@ and extremely friendly and very human little bit emoticon and get straight to th
           border-collapse: separate;
           border-spacing: 0;
           font-size: 0.95em;
+          background: ${darkMode ? '#1e293b' : '#ffffff'};
+          border-radius: 8px;
           overflow: hidden;
+          border: 1px solid ${darkMode ? '#334155' : '#e2e8f0'};
         }
 
         .markdown-table th,
         .markdown-table td {
-          padding: 16px;
-          border-bottom: 1px solid ${darkMode ? '#334155' : '#e2e8f0'};
-          border-right: 1px solid ${darkMode ? '#334155' : '#e2e8f0'};
+          padding: 1rem 1.5rem;
+          text-align: left;
+          border-bottom: 1px solid ${darkMode ? 'rgba(51, 65, 85, 0.3)' : 'rgba(226, 232, 240, 0.5)'};
+          font-size: 0.95em;
+          line-height: 1.6;
+          white-space: nowrap;
+        }
+
+        .markdown-table td:not(:last-child),
+        .markdown-table th:not(:last-child) {
+          border-right: 1px solid ${darkMode ? 'rgba(51, 65, 85, 0.3)' : 'rgba(226, 232, 240, 0.5)'};
+        }
+
+        .markdown-table td:last-child {
+          white-space: normal;
+          min-width: 200px;
         }
 
         .markdown-table th:last-child,
@@ -2355,7 +2523,15 @@ and extremely friendly and very human little bit emoticon and get straight to th
         }
 
         .markdown-table thead {
-          background: ${darkMode ? '#0f172a' : '#f8fafc'};
+          background: ${darkMode ? 
+            'linear-gradient(to right, #1e293b, #0f172a)' : 
+            'linear-gradient(to right, #f8fafc, #f1f5f9)'};
+          position: sticky;
+          top: 0;
+          z-index: 1;
+          box-shadow: 0 2px 4px ${darkMode ? 
+            'rgba(0, 0, 0, 0.3)' : 
+            'rgba(0, 0, 0, 0.1)'};
         }
 
         .markdown-table th {
@@ -2364,28 +2540,108 @@ and extremely friendly and very human little bit emoticon and get straight to th
           font-size: 0.85em;
           letter-spacing: 0.05em;
           color: ${darkMode ? '#94a3b8' : '#475569'};
-          padding: 12px 16px;
+          padding: 1.2rem 1.5rem;
+          position: relative;
+          background: ${darkMode ? 
+            'rgba(15, 23, 42, 0.8)' : 
+            'rgba(248, 250, 252, 0.8)'};
+        }
+
+        .markdown-table th::after {
+          content: '';
+          position: absolute;
+          bottom: 0;
+          left: 0;
+          right: 0;
+          height: 3px;
+          background: ${darkMode ? 
+            'linear-gradient(to right, #3b82f6, #2563eb)' : 
+            'linear-gradient(to right, #60a5fa, #3b82f6)'};
+          opacity: 0.7;
+          border-radius: 3px 3px 0 0;
         }
 
         .markdown-table tbody tr {
           background: ${darkMode ? '#1e293b' : '#ffffff'};
-          transition: all 0.2s ease;
+          transition: all 0.3s ease;
         }
 
         .markdown-table tbody tr:nth-child(even) {
-          background: ${darkMode ? '#1e293b' : '#f8fafc'};
+          background: ${darkMode ? 
+            'rgba(15, 23, 42, 0.3)' : 
+            'rgba(248, 250, 252, 0.5)'};
         }
 
         .markdown-table tbody tr:hover {
-          background: ${darkMode ? '#334155' : '#f1f5f9'};
+          background: ${darkMode ? 
+            'rgba(51, 65, 85, 0.5)' : 
+            'rgba(241, 245, 249, 0.8)'};
+          transform: translateY(-1px);
+          box-shadow: 0 2px 8px ${darkMode ? 
+            'rgba(0, 0, 0, 0.2)' : 
+            'rgba(0, 0, 0, 0.05)'};
         }
 
         .markdown-table td {
           transition: all 0.2s ease;
+          position: relative;
         }
 
         .markdown-table tbody tr:hover td {
           color: ${darkMode ? '#f8fafc' : '#1e293b'};
+        }
+
+        .markdown-table tbody tr:last-child {
+          font-weight: 600;
+          background: ${darkMode ? 
+            'rgba(51, 65, 85, 0.3)' : 
+            'rgba(241, 245, 249, 0.5)'};
+        }
+
+        .markdown-table tbody tr:last-child td {
+          border-bottom: none;
+          color: ${darkMode ? '#93c5fd' : '#2563eb'};
+        }
+
+        .ascii-table-container {
+          margin: 1.5em 0;
+          padding: 1.5rem;
+          background: ${darkMode ? '#0f172a' : '#f8fafc'};
+          border-radius: 12px;
+          overflow-x: auto;
+          border: 1px solid ${darkMode ? '#334155' : '#e2e8f0'};
+          box-shadow: ${darkMode ? 
+            'inset 0 0 30px rgba(0,0,0,0.3), 0 0 20px rgba(0,0,0,0.3)' : 
+            'inset 0 0 30px rgba(0,0,0,0.05), 0 0 20px rgba(0,0,0,0.1)'};
+        }
+
+        .ascii-table {
+          font-family: 'Consolas', 'Courier New', monospace;
+          font-size: 0.9em;
+          line-height: 1.2;
+          white-space: pre;
+          color: ${darkMode ? '#a5f3fc' : '#0f172a'};
+          text-shadow: ${darkMode ? 
+            '0 0 5px rgba(165, 243, 252, 0.3)' : 
+            'none'};
+        }
+
+        @keyframes asciiGlow {
+          0% { opacity: 0.8; }
+          50% { opacity: 1; }
+          100% { opacity: 0.8; }
+        }
+
+        .ascii-table-container::before {
+          content: '$ ASCII Table Output';
+          display: block;
+          margin-bottom: 1rem;
+          font-family: 'Consolas', 'Courier New', monospace;
+          font-size: 0.8em;
+          color: ${darkMode ? '#64748b' : '#94a3b8'};
+          border-bottom: 1px solid ${darkMode ? '#334155' : '#e2e8f0'};
+          padding-bottom: 0.5rem;
+          animation: asciiGlow 2s infinite;
         }
 
         .prose hr {
