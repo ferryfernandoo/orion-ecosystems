@@ -520,7 +520,7 @@ const ChatBot = () => {
       recognitionRef.current.autoRestart = true;
 
       recognitionRef.current.onresult = (event) => {
-        // Skip jika sedang menunggu respon AI atau TTS sedang berbicara
+        // Skip jika sedang dalam proses atau menunggu respon
         if (recognitionRef.current.isProcessing ||
             recognitionRef.current.waitingForResponse ||
             speechSynthesisRef.current?.speaking) return;
@@ -530,43 +530,46 @@ const ChatBot = () => {
           .map(result => result.transcript)
           .join(' ');
         
-        // Update accumulated text and input message
-        recognitionRef.current.accumulatedText = transcript;
+        // Update input message untuk feedback visual
         setInputMessage(transcript);
         
-        // Jika hasil final
+        // Hanya proses jika ini adalah hasil final
         if (event.results[event.results.length - 1].isFinal) {
-          recognitionRef.current.lastSpeechTime = Date.now();
-          
-          // Reset timer setiap kali ada perubahan transcript
+          // Reset timer yang ada
           clearTimeout(recognitionRef.current.timeout);
+          
+          // Update waktu speech terakhir
+          recognitionRef.current.lastSpeechTime = Date.now();
           
           // Hitung jumlah kata
           const wordCount = transcript.trim().split(/\s+/).length;
           
-          // Tunggu lebih lama (2.5 detik) sebelum mengirim
+          // Tunggu sebentar untuk memastikan user sudah selesai bicara
           recognitionRef.current.timeout = setTimeout(() => {
             // Cek apakah sudah cukup kata dan tidak ada suara baru
-            if (wordCount >= recognitionRef.current.minWordCount && 
+            if (!recognitionRef.current.isProcessing && 
+                !recognitionRef.current.waitingForResponse &&
+                wordCount >= recognitionRef.current.minWordCount && 
                 Date.now() - recognitionRef.current.lastSpeechTime >= 1500) {
               
+              // Set flags untuk mencegah pengiriman ganda
               recognitionRef.current.isProcessing = true;
+              recognitionRef.current.waitingForResponse = true;
+              
+              // Stop recognition sebelum mengirim
+              try {
+                recognitionRef.current.stop();
+              } catch (error) {
+                console.error('Error stopping recognition:', error);
+              }
+              
+              // Kirim pesan
               handleSendMessage(transcript);
               
               // Reset state
-              recognitionRef.current.accumulatedText = '';
               setInputMessage('');
-              
-                      // Pause recognition dan tunggu respon AI
-              try {
-                recognitionRef.current.stop();
-                recognitionRef.current.waitingForResponse = true;  // Tandai sedang menunggu respon
-                recognitionRef.current.autoRestart = false;  // Jangan restart dulu
-              } catch (error) {
-                console.error('Error pausing recognition:', error);
-              }
             }
-          }, 2500);
+          }, 2000);
         }
       };
 
@@ -1195,11 +1198,12 @@ const ChatBot = () => {
     const trimmedMessage = messageText.trim();
     if ((!trimmedMessage && files.length === 0) || isBotTyping) return;
 
-    // Pause voice recognition while processing
-    if (recognitionRef.current) {
-      recognitionRef.current.stop();
-      recognitionRef.current.waitingForResponse = true;
-      recognitionRef.current.autoRestart = false;
+    // Jika menggunakan voice recognition, pastikan flags sudah diset dengan benar
+    if (recognitionRef.current && isListening) {
+      if (!recognitionRef.current.isProcessing || !recognitionRef.current.waitingForResponse) {
+        // Jika flags belum diset, ini mungkin pemanggilan manual - skip
+        return;
+      }
     }
 
     setIsGenerating(true);
@@ -1488,9 +1492,10 @@ and extremely friendly and very human little bit emoticon and get straight to th
     if (!ttsEnabled) return;
     
     try {
-      // Stop voice recognition while speaking
-      if (recognitionRef.current && recognitionRef.current.isProcessing === false) {
+      // Pause voice recognition while speaking
+      if (recognitionRef.current) {
         recognitionRef.current.stop();
+        recognitionRef.current.waitingForResponse = false;
       }
       
       // Hentikan semua suara yang sedang berjalan
@@ -1511,24 +1516,37 @@ and extremely friendly and very human little bit emoticon and get straight to th
       
       speechSynthesisRef.current = utterance;
       
-      utterance.onend = () => {
-        setIsSpeaking(false);
-        speechSynthesisRef.current = null;
-        
-        // Restart voice recognition after speaking
-        if (recognitionRef.current && isListening) {
-          setTimeout(() => {
-            try {
-              recognitionRef.current.start();
-              recognitionRef.current.isProcessing = false;
-            } catch (error) {
-              console.error('Error restarting recognition after speaking:', error);
-            }
-          }, 300);
-        }
-      };
-      
-      window.speechSynthesis.speak(utterance);
+      // Promise untuk menunggu TTS selesai dan restart recognition
+      await new Promise((resolve) => {
+        utterance.onend = () => {
+          setIsSpeaking(false);
+          speechSynthesisRef.current = null;
+
+          // Restart voice recognition setelah TTS selesai
+          if (recognitionRef.current && isListening) {
+            setTimeout(() => {
+              try {
+                // Reset semua flag
+                recognitionRef.current.isProcessing = false;
+                recognitionRef.current.waitingForResponse = false;
+                recognitionRef.current.autoRestart = true;
+                recognitionRef.current.start();
+                
+                // Reset input state untuk siap menerima input baru
+                setInputMessage('');
+                recognitionRef.current.accumulatedText = '';
+                recognitionRef.current.lastSpeechTime = Date.now();
+              } catch (error) {
+                console.error('Error restarting recognition after speaking:', error);
+              }
+            }, 300);
+          }
+          resolve();
+        };
+
+        // Start speaking
+        window.speechSynthesis.speak(utterance);
+      });
     } catch (error) {
       console.error('TTS Error:', error);
       setIsSpeaking(false);
