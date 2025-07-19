@@ -672,7 +672,7 @@ const ChatBot = () => {
     }
   };
 
-  const genAI = new GoogleGenerativeAI("AIzaSyDSTgkkROL7mjaGKoD2vnc8l2UptNCbvHk");
+  const genAI = new GoogleGenerativeAI("AIzaSyCTkh3sqpWWjGB51HfbkbBXz1KRInIb_VM");
   const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
   const analyzeWithReasoner = async (message) => {
