@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import PropTypes from 'prop-types';
 import DOMPurify from 'dompurify';
 import { motion, AnimatePresence, useAnimation } from 'framer-motion';
@@ -172,7 +172,15 @@ const TypingAnimation = () => (
   </motion.div>
 );
 
-const ChatMessage = ({ message, isUser }) => {
+const TypingDots = () => (
+  <div className="inline-flex items-center gap-1 bg-gray-200 dark:bg-gray-700 px-3 py-2 rounded-full">
+    <div className="w-2 h-2 rounded-full bg-gray-500 dark:bg-gray-300 typing-dot"></div>
+    <div className="w-2 h-2 rounded-full bg-gray-500 dark:bg-gray-300 typing-dot"></div>
+    <div className="w-2 h-2 rounded-full bg-gray-500 dark:bg-gray-300 typing-dot"></div>
+  </div>
+);
+
+const ChatMessage = ({ message, isUser, currentMessageId }) => {
   const controls = useAnimation();
   const messageRef = useRef(null);
   
@@ -185,7 +193,6 @@ const ChatMessage = ({ message, isUser }) => {
               opacity: 1,
               y: 0,
               scale: 1,
-              filter: "blur(0px)",
               transition: {
                 type: "spring",
                 damping: 20,
@@ -202,18 +209,22 @@ const ChatMessage = ({ message, isUser }) => {
     }
   }, [controls]);
 
+  // Message render effect
+  useEffect(() => {
+    // Handle message render animations if needed
+  }, [isUser, message.isBot]);
+
   return (
     <motion.div
       ref={messageRef}
       initial={{ opacity: 0, y: 50, scale: 0.9, filter: "blur(8px)" }}
-      animate={controls}
-      className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-4`}
+      animate={controls}          className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-4`}
     >
       <motion.div
-        className={`rounded-lg p-4 max-w-[80%] backdrop-blur-sm ${
+        className={`rounded-lg p-4 max-w-[80%] transition-all duration-300 ${
           isUser 
             ? 'bg-blue-500 text-white bg-opacity-90 ml-auto shadow-blue-500/20' 
-            : 'bg-white dark:bg-gray-800 dark:text-white bg-opacity-75 dark:bg-opacity-50 shadow-lg'
+            : 'bg-white dark:bg-gray-800 dark:text-white bg-opacity-90 dark:bg-opacity-90 shadow-lg'
         }`}
         whileHover={{ scale: 1.02 }}
         transition={{ type: "spring", stiffness: 400, damping: 25 }}
@@ -874,9 +885,7 @@ const ChatBot = () => {
     setIsGenerating(true);
     setShowTypingAnimation(true);
     
-    const interval = setInterval(() => {
-      setBlurStrength(prev => (prev + 1) % 5);
-    }, 200);
+
     
     setHideSuggestions(false);
 
@@ -913,6 +922,13 @@ const ChatBot = () => {
       setShowTemplateButtons(false);
       messageCountRef.current += 1;
       setProcessingSources([]);
+
+      // Cleanup function untuk animasi mengetik
+      const cleanupTyping = () => {
+        setIsBotTyping(false);
+        setShowTypingAnimation(false);
+        setBlurStrength(0);
+      };
 
       if (textareaRef.current) {
         textareaRef.current.style.height = 'auto';
@@ -1124,6 +1140,7 @@ and extremely friendly and very human little bit emoticon and get straight to th
       setMessages(prev => [...prev, createMessageObject(errorMessage, true)]);
     } finally {
       setIsBotTyping(false);
+      setShowTypingAnimation(false);
       setFileProcessing(false);
       setProcessingSources([]);
       clearTimeout(timeoutId);
@@ -1424,13 +1441,8 @@ and extremely friendly and very human little bit emoticon and get straight to th
         <motion.div 
           ref={chatContainerRef}
           className={`flex-1 overflow-y-auto p-4 space-y-4 scrollbar-thin scrollbar-thumb-gray-500 scrollbar-track-transparent 
-            ${themeClasses.bgPrimary} backdrop-blur-md bg-opacity-80
-            ${isGenerating ? 'filter blur-sm transition-all duration-300' : ''}
+            ${themeClasses.bgPrimary}
           `}
-          animate={{
-            filter: `blur(${blurStrength}px)`,
-            transition: { duration: 0.3 }
-          }}
         >
           {messages.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full pb-16">
@@ -1478,7 +1490,8 @@ and extremely friendly and very human little bit emoticon and get straight to th
                   <motion.div key={message.id} className="message-wrapper">
                     <ChatMessage 
                       message={message} 
-                      isUser={!message.isBot} 
+                      isUser={!message.isBot}
+                      currentMessageId={currentMessageId.current}
                     />
                   </motion.div>
                 ))}
@@ -1633,7 +1646,7 @@ and extremely friendly and very human little bit emoticon and get straight to th
         )}
 
         {/* Bottom Input Container */}
-        <div className={`${themeClasses.border} ${themeClasses.bgSecondary} pt-3 pb-4 px-4 backdrop-blur-md bg-opacity-80`}>
+        <div className={`${themeClasses.border} ${themeClasses.bgSecondary} pt-3 pb-4 px-4`}>
           {/* Typing Animation */}
           <AnimatePresence>
             {showTypingAnimation && (
@@ -1966,13 +1979,8 @@ and extremely friendly and very human little bit emoticon and get straight to th
 
       <style jsx global>{`
         .typing-dot {
-          display: inline-block;
-          width: 8px;
-          height: 8px;
-          border-radius: 50%;
-          background-color: currentColor;
-          margin-right: 2px;
-          animation: typingAnimation 1.4s infinite ease-in-out;
+          opacity: 0.6;
+          animation: pulseAnimation 1s infinite;
         }
 
         .typing-dot:nth-child(1) {
@@ -1985,12 +1993,11 @@ and extremely friendly and very human little bit emoticon and get straight to th
 
         .typing-dot:nth-child(3) {
           animation-delay: 0.4s;
-          margin-right: 0;
         }
 
-        @keyframes typingAnimation {
-          0%, 60%, 100% { transform: translateY(0); }
-          30% { transform: translateY(-3px); }
+        @keyframes pulseAnimation {
+          0%, 100% { opacity: 0.6; transform: scale(1); }
+          50% { opacity: 1; transform: scale(1.2); }
         }
 
         .code-container {
