@@ -180,6 +180,92 @@ const TypingDots = () => (
   </div>
 );
 
+// Function to format JSON for display
+const formatJSON = (jsonString) => {
+  try {
+    const parsed = JSON.parse(jsonString);
+    return JSON.stringify(parsed, null, 2);
+  } catch (e) {
+    return jsonString;
+  }
+};
+
+// Function to detect and format code blocks
+const formatMessage = (text) => {
+  if (!text) return '';
+  
+  // Replace code blocks with syntax highlighting
+  text = text.replace(/```(\w+)?\n([\s\S]*?)```/g, (match, language, code) => {
+    return `<div class="code-container">
+      <div class="code-toolbar">
+        <span class="language-tag">${language || 'text'}</span>
+        <button class="copy-button" onclick="navigator.clipboard.writeText(\`${code.trim()}\`)">
+          <span>Copy</span>
+        </button>
+      </div>
+      <pre class="code-block"><code class="language-${language || 'text'}">${code.trim()}</code></pre>
+    </div>`;
+  });
+
+  // Format tables if they exist in markdown format
+  text = text.replace(/\|.*\|/g, (table) => {
+    const rows = table.split('\n').filter(row => row.trim());
+    if (rows.length < 2) return table;
+
+    const headers = rows[0].split('|').filter(cell => cell.trim());
+    const alignments = rows[1].split('|').filter(cell => cell.trim());
+    const dataRows = rows.slice(2);
+
+    let tableHtml = '<div class="table-container"><table class="markdown-table">';
+    
+    // Headers
+    tableHtml += '<thead><tr>';
+    headers.forEach((header, i) => {
+      const align = alignments[i]?.includes(':') ? 'left' : 'center';
+      tableHtml += `<th style="text-align: ${align}">${header.trim()}</th>`;
+    });
+    tableHtml += '</tr></thead>';
+
+    // Data rows
+    if (dataRows.length) {
+      tableHtml += '<tbody>';
+      dataRows.forEach(row => {
+        const cells = row.split('|').filter(cell => cell.trim());
+        tableHtml += '<tr>';
+        cells.forEach((cell, i) => {
+          const align = alignments[i]?.includes(':') ? 'left' : 'center';
+          tableHtml += `<td style="text-align: ${align}">${cell.trim()}</td>`;
+        });
+        tableHtml += '</tr>';
+      });
+      tableHtml += '</tbody>';
+    }
+
+    tableHtml += '</table></div>';
+    return tableHtml;
+  });
+
+  // Format JSON if detected
+  text = text.replace(/```json\n([\s\S]*?)```/g, (match, json) => {
+    try {
+      const formatted = formatJSON(json);
+      return `<div class="code-container">
+        <div class="code-toolbar">
+          <span class="language-tag">json</span>
+          <button class="copy-button" onclick="navigator.clipboard.writeText(\`${formatted}\`)">
+            <span>Copy</span>
+          </button>
+        </div>
+        <pre class="code-block"><code class="language-json">${formatted}</code></pre>
+      </div>`;
+    } catch (e) {
+      return match;
+    }
+  });
+
+  return text;
+};
+
 const ChatMessage = ({ message, isUser, currentMessageId }) => {
   const controls = useAnimation();
   const messageRef = useRef(null);
@@ -250,9 +336,10 @@ const ChatMessage = ({ message, isUser, currentMessageId }) => {
             )}
           </div>
         ) : (
-          <div className="text-sm whitespace-pre-wrap break-words">
-            {message.text}
-          </div>
+          <div 
+            className="text-sm whitespace-pre-wrap break-words prose"
+            dangerouslySetInnerHTML={{ __html: formatMessage(message.text) }}
+          />
         )}
 
         {message.reasoner && (
@@ -2216,6 +2303,40 @@ and extremely friendly and very human little bit emoticon and get straight to th
         .prose blockquote:hover {
           border-left-color: ${darkMode ? '#64748b' : '#94a3b8'};
         }
+
+        .table-container {
+          margin: 1em 0;
+          overflow-x: auto;
+          border-radius: 8px;
+          border: 1px solid ${darkMode ? '#334155' : '#e2e8f0'};
+        }
+
+        .markdown-table {
+          width: 100%;
+          border-collapse: collapse;
+          font-size: 0.9em;
+          overflow: hidden;
+        }
+
+        .markdown-table th,
+        .markdown-table td {
+          padding: 12px 16px;
+          border: 1px solid ${darkMode ? '#334155' : '#e2e8f0'};
+        }
+
+        .markdown-table thead {
+          background: ${darkMode ? '#1e293b' : '#f8fafc'};
+          font-weight: 600;
+        }
+
+        .markdown-table tbody tr:nth-child(even) {
+          background: ${darkMode ? 'rgba(30, 41, 59, 0.5)' : 'rgba(248, 250, 252, 0.5)'};
+        }
+
+        .markdown-table tbody tr:hover {
+          background: ${darkMode ? 'rgba(30, 41, 59, 0.8)' : 'rgba(248, 250, 252, 0.8)'};
+        }
+
         .prose hr {
           border: none;
           border-top: 1px solid ${darkMode ? '#334155' : '#e2e8f0'};
