@@ -8,7 +8,7 @@ import {
   FiClock, FiCpu, FiSettings, FiZap, FiStopCircle, FiMessageSquare,
   FiSun, FiMoon, FiSearch, FiDatabase, FiAward, FiChevronDown, FiChevronUp, FiChevronRight, FiGlobe,
   FiExternalLink, FiCheck, FiInfo, FiStar, FiAlertTriangle,
-  FiVolume2, FiVolumeX
+  FiVolume2, FiVolumeX, FiMic
 } from 'react-icons/fi';
 import { RiSendPlaneFill, RiBrainLine } from 'react-icons/ri';
 
@@ -495,6 +495,8 @@ const ChatBot = () => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [blurStrength, setBlurStrength] = useState(0);
   const [showTypingAnimation, setShowTypingAnimation] = useState(false);
+  const [isListening, setIsListening] = useState(false);
+  const recognitionRef = useRef(null);
   
   const messagesEndRef = useRef(null);
   const textareaRef = useRef(null);
@@ -503,7 +505,50 @@ const ChatBot = () => {
   const controls = useAnimation();
   const speechSynthesisRef = useRef(null);
 
-  const genAI = new GoogleGenerativeAI("AIzaSyDSTgkkROL7mjaGKoD2vnc8l2UptNCbvHk");
+  const startVoiceRecognition = () => {
+    if (!recognitionRef.current) {
+      recognitionRef.current = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+      recognitionRef.current.continuous = true;
+      recognitionRef.current.interimResults = true;
+      recognitionRef.current.lang = 'id-ID';
+
+      recognitionRef.current.onresult = (event) => {
+        const transcript = Array.from(event.results)
+          .map(result => result[0])
+          .map(result => result.transcript)
+          .join('');
+        
+        setInputMessage(transcript);
+        
+        // Jika hasil final, kirim pesan
+        if (event.results[0].isFinal) {
+          handleSendMessage(transcript);
+          stopVoiceRecognition();
+        }
+      };
+
+      recognitionRef.current.onerror = (event) => {
+        console.error('Voice recognition error:', event.error);
+        stopVoiceRecognition();
+      };
+    }
+
+    try {
+      recognitionRef.current.start();
+      setIsListening(true);
+    } catch (error) {
+      console.error('Error starting voice recognition:', error);
+    }
+  };
+
+  const stopVoiceRecognition = () => {
+    if (recognitionRef.current) {
+      recognitionRef.current.stop();
+      setIsListening(false);
+    }
+  };
+
+  const genAI = new GoogleGenerativeAI("AIzaSyD62mOmUszYLj_OJG5TT077jkFFzj2ZVd4");
   const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
   const analyzeWithReasoner = async (message) => {
@@ -1928,6 +1973,32 @@ and extremely friendly and very human little bit emoticon and get straight to th
 
           {/* Main Input Area */}
           <div className="flex items-center space-x-2 mb-2">
+            <div className="relative">
+              {isListening && (
+                <div className="absolute -top-6 left-1/2 transform -translate-x-1/2 text-xs text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-800 px-2 py-0.5 rounded-full shadow-sm">
+                  Mendengarkan...
+                </div>
+              )}
+              <motion.button
+                whileHover={{ scale: 1.1 }}
+                whileTap={{ scale: 0.9 }}
+                onClick={() => {
+                  if (isListening) {
+                    stopVoiceRecognition();
+                  } else {
+                    startVoiceRecognition();
+                  }
+                }}
+                className={`p-2 rounded-full transition-all ${
+                  isListening
+                    ? 'bg-red-500 dark:bg-red-600 text-white'
+                    : `${themeClasses.bgTertiary} ${themeClasses.textPrimary}`
+                }`}
+                title={isListening ? 'Hentikan input suara' : 'Mulai input suara'}
+              >
+                <FiMic size={18} />
+              </motion.button>
+            </div>
             <motion.button
               whileHover={{ scale: 1.1 }}
               whileTap={{ scale: 0.9 }}
