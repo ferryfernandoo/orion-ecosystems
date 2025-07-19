@@ -520,16 +520,47 @@ const ChatBot = () => {
         
         setInputMessage(transcript);
         
-        // Jika hasil final, kirim pesan
-        if (event.results[0].isFinal) {
-          handleSendMessage(transcript);
-          stopVoiceRecognition();
+        // Jika hasil final
+        if (event.results[event.results.length - 1].isFinal) {
+          // Deteksi jeda bicara (1.5 detik)
+          clearTimeout(recognitionRef.current.timeout);
+          recognitionRef.current.timeout = setTimeout(() => {
+            handleSendMessage(transcript);
+            // Restart recognition untuk tetap standby
+            try {
+              recognitionRef.current.stop();
+              setTimeout(() => {
+                if (isListening) {
+                  recognitionRef.current.start();
+                }
+              }, 100);
+            } catch (error) {
+              console.error('Error restarting recognition:', error);
+            }
+          }, 1500);
+        }
+      };
+
+      recognitionRef.current.onend = () => {
+        // Restart jika masih dalam mode listening
+        if (isListening) {
+          try {
+            recognitionRef.current.start();
+          } catch (error) {
+            console.error('Error restarting recognition:', error);
+          }
         }
       };
 
       recognitionRef.current.onerror = (event) => {
+        if (event.error === 'no-speech') {
+          // Ignore no-speech error dan tetap standby
+          return;
+        }
         console.error('Voice recognition error:', event.error);
-        stopVoiceRecognition();
+        if (event.error === 'network' || event.error === 'service-not-allowed') {
+          stopVoiceRecognition();
+        }
       };
     }
 
