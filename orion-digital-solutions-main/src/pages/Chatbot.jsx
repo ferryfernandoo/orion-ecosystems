@@ -1492,10 +1492,9 @@ and extremely friendly and very human little bit emoticon and get straight to th
     if (!ttsEnabled) return;
     
     try {
-      // Pause voice recognition while speaking
-      if (recognitionRef.current) {
+      // Stop voice recognition while speaking
+      if (recognitionRef.current && recognitionRef.current.isProcessing === false) {
         recognitionRef.current.stop();
-        recognitionRef.current.waitingForResponse = false;
       }
       
       // Hentikan semua suara yang sedang berjalan
@@ -1516,37 +1515,24 @@ and extremely friendly and very human little bit emoticon and get straight to th
       
       speechSynthesisRef.current = utterance;
       
-      // Promise untuk menunggu TTS selesai dan restart recognition
-      await new Promise((resolve) => {
-        utterance.onend = () => {
-          setIsSpeaking(false);
-          speechSynthesisRef.current = null;
-
-          // Restart voice recognition setelah TTS selesai
-          if (recognitionRef.current && isListening) {
-            setTimeout(() => {
-              try {
-                // Reset semua flag
-                recognitionRef.current.isProcessing = false;
-                recognitionRef.current.waitingForResponse = false;
-                recognitionRef.current.autoRestart = true;
-                recognitionRef.current.start();
-                
-                // Reset input state untuk siap menerima input baru
-                setInputMessage('');
-                recognitionRef.current.accumulatedText = '';
-                recognitionRef.current.lastSpeechTime = Date.now();
-              } catch (error) {
-                console.error('Error restarting recognition after speaking:', error);
-              }
-            }, 300);
-          }
-          resolve();
-        };
-
-        // Start speaking
-        window.speechSynthesis.speak(utterance);
-      });
+      utterance.onend = () => {
+        setIsSpeaking(false);
+        speechSynthesisRef.current = null;
+        
+        // Restart voice recognition after speaking
+        if (recognitionRef.current && isListening) {
+          setTimeout(() => {
+            try {
+              recognitionRef.current.start();
+              recognitionRef.current.isProcessing = false;
+            } catch (error) {
+              console.error('Error restarting recognition after speaking:', error);
+            }
+          }, 300);
+        }
+      };
+      
+      window.speechSynthesis.speak(utterance);
     } catch (error) {
       console.error('TTS Error:', error);
       setIsSpeaking(false);
