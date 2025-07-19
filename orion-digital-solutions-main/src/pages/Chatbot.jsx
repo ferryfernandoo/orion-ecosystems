@@ -217,7 +217,7 @@ const ChatMessage = ({ message, isUser, currentMessageId }) => {
   return (
     <motion.div
       ref={messageRef}
-      initial={{ opacity: 0, y: 50, scale: 0.9, filter: "blur(8px)" }}
+      initial={{ opacity: 0, y: 50, scale: 0.9 }}
       animate={controls}          className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-4`}
     >
       <motion.div
@@ -1836,7 +1836,6 @@ and extremely friendly and very human little bit emoticon and get straight to th
                 className={`w-full rounded-xl px-4 py-3 pr-14 
                   focus:outline-none resize-none overflow-hidden
                   transition-all duration-300 ease-in-out
-                  backdrop-blur-sm bg-opacity-80
                   shadow-lg dark:shadow-blue-500/20
                   ${themeClasses.inputBg} ${themeClasses.inputBorder}
                   border-blue-100 dark:border-blue-500/20
