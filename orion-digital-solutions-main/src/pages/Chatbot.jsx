@@ -1530,14 +1530,17 @@ and extremely friendly and very human little bit emoticon and get straight to th
     if (!ttsEnabled) return;
     
     try {
-      // Pause voice recognition while speaking
-      if (recognitionRef.current) {
-        recognitionRef.current.stop();
-        recognitionRef.current.waitingForResponse = false;
-      }
-      
-      // Hentikan semua suara yang sedang berjalan
+      // Stop any ongoing speech
       window.speechSynthesis.cancel();
+      
+      // Temporarily stop voice recognition
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.stop();
+        } catch (error) {
+          console.error('Error stopping recognition:', error);
+        }
+      }
       
       setIsSpeaking(true);
       const cleanText = text.replace(/<[^>]*>/g, '').replace(/\n/g, ' ');
@@ -1554,28 +1557,41 @@ and extremely friendly and very human little bit emoticon and get straight to th
       
       speechSynthesisRef.current = utterance;
       
-      // Promise untuk menunggu TTS selesai dan restart recognition
-      await new Promise((resolve) => {
+      // Promise untuk menunggu TTS selesai satu kali dan restart recognition
+      return new Promise((resolve) => {
         utterance.onend = () => {
           setIsSpeaking(false);
           speechSynthesisRef.current = null;
 
+          // Pastikan kita hanya membaca sekali
+          window.speechSynthesis.cancel();
+
           // Restart voice recognition setelah TTS selesai
           if (recognitionRef.current && isListening) {
+            // Tunggu sebentar sebelum restart
             setTimeout(() => {
               try {
-                // Reset semua flag
+                // Reset semua state
                 recognitionRef.current.isProcessing = false;
                 recognitionRef.current.waitingForResponse = false;
                 recognitionRef.current.autoRestart = true;
-                recognitionRef.current.start();
-                
-                // Reset input state untuk siap menerima input baru
-                setInputMessage('');
                 recognitionRef.current.accumulatedText = '';
                 recognitionRef.current.lastSpeechTime = Date.now();
+                setInputMessage('');
+
+                // Start recognition
+                recognitionRef.current.start();
+                console.log('Voice recognition restarted after TTS');
               } catch (error) {
                 console.error('Error restarting recognition after speaking:', error);
+                // Retry once if failed
+                setTimeout(() => {
+                  try {
+                    recognitionRef.current.start();
+                  } catch (retryError) {
+                    console.error('Retry failed:', retryError);
+                  }
+                }, 500);
               }
             }, 300);
           }
@@ -1588,6 +1604,21 @@ and extremely friendly and very human little bit emoticon and get straight to th
     } catch (error) {
       console.error('TTS Error:', error);
       setIsSpeaking(false);
+      
+      // Jika terjadi error pada TTS, tetap coba restart voice recognition
+      if (recognitionRef.current && isListening) {
+        setTimeout(() => {
+          try {
+            recognitionRef.current.isProcessing = false;
+            recognitionRef.current.waitingForResponse = false;
+            recognitionRef.current.autoRestart = true;
+            recognitionRef.current.start();
+            console.log('Voice recognition restarted after TTS error');
+          } catch (recogError) {
+            console.error('Error restarting recognition after TTS error:', recogError);
+          }
+        }, 300);
+      }
     }
   };
 
