@@ -520,8 +520,10 @@ const ChatBot = () => {
       recognitionRef.current.autoRestart = true;
 
       recognitionRef.current.onresult = (event) => {
-        // Jangan proses jika sedang TTS berbicara
-        if (speechSynthesisRef.current?.speaking) return;
+        // Skip jika sedang menunggu respon AI atau TTS sedang berbicara
+        if (recognitionRef.current.isProcessing ||
+            recognitionRef.current.waitingForResponse ||
+            speechSynthesisRef.current?.speaking) return;
         
         const transcript = Array.from(event.results)
           .map(result => result[0])
@@ -555,10 +557,11 @@ const ChatBot = () => {
               recognitionRef.current.accumulatedText = '';
               setInputMessage('');
               
-              // Pause recognition sementara selama AI memproses
+                      // Pause recognition dan tunggu respon AI
               try {
                 recognitionRef.current.stop();
-                recognitionRef.current.autoRestart = true;  // Set flag untuk restart otomatis
+                recognitionRef.current.waitingForResponse = true;  // Tandai sedang menunggu respon
+                recognitionRef.current.autoRestart = false;  // Jangan restart dulu
               } catch (error) {
                 console.error('Error pausing recognition:', error);
               }
@@ -1195,7 +1198,8 @@ const ChatBot = () => {
     // Pause voice recognition while processing
     if (recognitionRef.current) {
       recognitionRef.current.stop();
-      recognitionRef.current.autoRestart = true;
+      recognitionRef.current.waitingForResponse = true;
+      recognitionRef.current.autoRestart = false;
     }
 
     setIsGenerating(true);
@@ -1242,30 +1246,17 @@ const ChatBot = () => {
         setShowTypingAnimation(false);
         setBlurStrength(0);
 
-        // Restart voice recognition setelah AI selesai menjawab
-        if (recognitionRef.current && isListening) {
+        // Jika TTS diaktifkan, biarkan proses TTS yang akan me-restart recognition
+        if (!ttsEnabled && recognitionRef.current && isListening) {
           setTimeout(() => {
             try {
-              // Pastikan TTS sudah selesai berbicara
-              if (!speechSynthesisRef.current?.speaking) {
-                recognitionRef.current.start();
-                recognitionRef.current.isProcessing = false;
-              } else {
-                // Tunggu sampai TTS selesai
-                const checkAndStart = () => {
-                  if (!speechSynthesisRef.current?.speaking) {
-                    recognitionRef.current.start();
-                    recognitionRef.current.isProcessing = false;
-                  } else {
-                    setTimeout(checkAndStart, 100);
-                  }
-                };
-                setTimeout(checkAndStart, 100);
-              }
+              recognitionRef.current.waitingForResponse = false;
+              recognitionRef.current.isProcessing = false;
+              recognitionRef.current.start();
             } catch (error) {
               console.error('Error restarting recognition after response:', error);
             }
-          }, 500); // Tunggu setengah detik sebelum restart
+          }, 500);
         }
       };
 
@@ -1494,23 +1485,28 @@ and extremely friendly and very human little bit emoticon and get straight to th
   };
 
   const speakText = async (text) => {
-    if (!ttsEnabled || isSpeaking) return;
+    if (!ttsEnabled) return;
     
     try {
+      // Stop voice recognition while speaking
+      if (recognitionRef.current && recognitionRef.current.isProcessing === false) {
+        recognitionRef.current.stop();
+      }
+      
       // Hentikan semua suara yang sedang berjalan
       window.speechSynthesis.cancel();
       
       setIsSpeaking(true);
       const cleanText = text.replace(/<[^>]*>/g, '').replace(/\n/g, ' ');
       // Batasi panjang teks untuk mengurangi latency
-      const maxLength = 200;
+      const maxLength = 300;
       const truncatedText = cleanText.length > maxLength ? 
         cleanText.substring(0, maxLength) + "..." : 
         cleanText;
       
       const utterance = new SpeechSynthesisUtterance(truncatedText);
       utterance.lang = 'id-ID';
-      utterance.rate = 1.8; // Kecepatan ditingkatkan
+      utterance.rate = 1.5; // Kecepatan lebih natural
       utterance.pitch = 1.0;
       
       speechSynthesisRef.current = utterance;
@@ -1518,6 +1514,18 @@ and extremely friendly and very human little bit emoticon and get straight to th
       utterance.onend = () => {
         setIsSpeaking(false);
         speechSynthesisRef.current = null;
+        
+        // Restart voice recognition after speaking
+        if (recognitionRef.current && isListening) {
+          setTimeout(() => {
+            try {
+              recognitionRef.current.start();
+              recognitionRef.current.isProcessing = false;
+            } catch (error) {
+              console.error('Error restarting recognition after speaking:', error);
+            }
+          }, 300);
+        }
       };
       
       window.speechSynthesis.speak(utterance);
