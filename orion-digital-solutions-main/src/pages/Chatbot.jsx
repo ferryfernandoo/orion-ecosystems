@@ -699,14 +699,23 @@ const ChatBot = () => {
       recognitionRef.current.waitingForResponse = false;
     }
   };
-  const genAI = new GoogleGenerativeAI("AIzaSyDSTgkkROL7mjaGKoD2vnc8l2UptNCbvHk");
-const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+  // Initialize multiple API instances for different features
+  const mainGenAI = new GoogleGenerativeAI("AIzaSyDSTgkkROL7mjaGKoD2vnc8l2UptNCbvHk");
+  const memoryGenAI = new GoogleGenerativeAI("AIzaSyB9GeiZXHvcui45w4dWpESnpe3WxDk_wxo");
+  const suggestionsGenAI = new GoogleGenerativeAI("AIzaSyD62mOmUszYLj_OJG5TT077jkFFzj2ZVd4");
+  const reasonerGenAI = new GoogleGenerativeAI("AIzaSyCTkh3sqpWWjGB51HfbkbBXz1KRInIb_VM");
+
+  // Initialize models for different purposes
+  const mainModel = mainGenAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+  const memoryModel = memoryGenAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+  const suggestionsModel = suggestionsGenAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+  const reasonerModel = reasonerGenAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
   const analyzeWithReasoner = async (message) => {
     if (!reasonerEnabled) return null;
     
     try {
-      const result = await model.generateContent(`
+      const result = await reasonerModel.generateContent(`
         Analisa singkat untuk pesan: "${message}"
 
         Berikan analisis dalam format ringkas:
@@ -865,7 +874,7 @@ const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
   const generateSuggestions = async (response) => {
     try {
-      const result = await model.generateContent(`
+      const result = await suggestionsModel.generateContent(`
         Berdasarkan respons ini: "${response}"
         Berikan 5 saran prompt singkat (maksimal 3 kata) untuk melanjutkan percakapan.
         Setiap prompt harus padat dan jelas.
@@ -989,7 +998,7 @@ const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
       4. Apakah ada preferensi atau kebiasaan pengguna?\n
       Format output: [RINGKASAN] | [TINGKAT_KEPENTINGAN]\n\nPercakapan:\n${conversation}`;
       
-      const result = await model.generateContent(prompt);
+      const result = await memoryModel.generateContent(prompt);
       const response = await result.response.text();
       return response.trim() || "Tidak bisa membuat ringkasan | 1";
     } catch (error) {
@@ -1024,7 +1033,7 @@ const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
       
       const prompt = `Daftar memori:\n${memoryTexts}\n\nPertanyaan: "${query}"\n\nIdentifikasi ID memori yang paling relevan (berdasarkan makna, bukan kata kunci) untuk pertanyaan dalam bahasa Indonesia. Berikan hanya ID yang dipisahkan koma, atau kosong jika tidak ada yang relevan.`;
       
-      const result = await model.generateContent(prompt);
+      const result = await memoryModel.generateContent(prompt);
       const response = await result.response.text();
       const relevantIds = response.trim().split(',').map(id => id.trim()).filter(Boolean);
       
@@ -1053,7 +1062,7 @@ const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
       
       if (summary && !summary.includes("tidak bisa")) {
         const tagPrompt = `Beri 2-3 tag pendek dalam Bahasa Indonesia untuk ringkasan ini:\n"${summary}"\n\nTags harus berupa kata benda yang relevan dan dipisahkan koma.`;
-        const tagResult = await model.generateContent(tagPrompt);
+        const tagResult = await memoryModel.generateContent(tagPrompt);
         const tags = (await tagResult.response.text())
           .split(',')
           .map(t => t.trim().toLowerCase())
@@ -1147,7 +1156,7 @@ const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
       ]);
       
       try {
-        const result = await model.generateContent(enhancementPrompts[i]);
+        const result = await mainModel.generateContent(enhancementPrompts[i]);
         const response = await result.response.text();
         enhancedResponse = response;
       } catch (error) {
@@ -1369,7 +1378,7 @@ const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
         Berikan analisis ringkas dalam 2-3 kalimat per poin.`;
 
         try {
-          const reasoningResult = await model.generateContent(reasoningPrompt);
+          const reasoningResult = await reasonerModel.generateContent(reasoningPrompt);
           const reasoningResponse = await reasoningResult.response.text();
           setReasoning(reasoningResponse);
         } catch (error) {
@@ -1436,11 +1445,9 @@ and extremely friendly and very human little bit emoticon and get straight to th
         
         Berikan analisis yang ringkas namun mendalam.`;
 
-        try {
-          const reasoningResult = await model.generateContent(reasoningPrompt);
-          const reasoningResponse = await reasoningResult.response.text();
-          
-          setMessages(prev => [...prev, {
+          try {
+            const reasoningResult = await reasonerModel.generateContent(reasoningPrompt);
+            const reasoningResponse = await reasoningResult.response.text();          setMessages(prev => [...prev, {
             id: Date.now() + '-reasoning',
             text: reasoningResponse,
             isBot: true,
@@ -1454,12 +1461,12 @@ and extremely friendly and very human little bit emoticon and get straight to th
 
       let botResponse;
       if (isProMode) {
-        const initialResult = await model.generateContent(fullPrompt);
+        const initialResult = await mainModel.generateContent(fullPrompt);
         const initialResponse = await initialResult.response.text();
         
         botResponse = await enhanceWithProMode(initialResponse, fullPrompt);
       } else {
-        const result = await model.generateContent(fullPrompt);
+        const result = await mainModel.generateContent(fullPrompt);
         botResponse = await result.response.text();
       }
       
@@ -1480,7 +1487,7 @@ and extremely friendly and very human little bit emoticon and get straight to th
       const suggestions = await generateSuggestions(processedResponse);
 
       if (reasonerEnabled) {
-        const analysisResult = await model.generateContent(`
+        const analysisResult = await reasonerModel.generateContent(`
           Analisis mendalam untuk: "${trimmedMessage}"
           1. Konteks & Tujuan: ${relevantMemories ? 'Menggunakan konteks sebelumnya' : 'Percakapan baru'}
           2. Implikasi: ${messages.length > 0 ? 'Melanjutkan diskusi' : 'Memulai diskusi'}
