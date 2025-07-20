@@ -699,48 +699,22 @@ const ChatBot = () => {
       recognitionRef.current.waitingForResponse = false;
     }
   };
-  // Initialize multiple API instances for different features
-  const mainGenAI = new GoogleGenerativeAI("AIzaSyD62mOmUszYLj_OJG5TT077jkFFzj2ZVd4");
-  const memoryGenAI = new GoogleGenerativeAI("AIzaSyB9GeiZXHvcui45w4dWpESnpe3WxDk_wxo");
-  const suggestionsGenAI = new GoogleGenerativeAI("AIzaSyD62mOmUszYLj_OJG5TT077jkFFzj2ZVd4");
-  const reasonerGenAI = new GoogleGenerativeAI("AIzaSyCTkh3sqpWWjGB51HfbkbBXz1KRInIb_VM");
+  const genAI = new GoogleGenerativeAI("AIzaSyDSTgkkROL7mjaGKoD2vnc8l2UptNCbvHk");
+  const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
-  // Initialize models for different purposes
-  const mainModel = mainGenAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-  const memoryModel = memoryGenAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-  const suggestionsModel = suggestionsGenAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-  const reasonerModel = reasonerGenAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-
-  const analyzeWithReasoner = async (message, context = '', memoryInsights = '') => {
+  const analyzeWithReasoner = async (message) => {
     if (!reasonerEnabled) return null;
     
     try {
-      const result = await reasonerModel.generateContent(`
-        Analisis Komprehensif:
-        
-        Pesan: "${message}"
-        ${context ? `\nKonteks Percakapan:\n${context}` : ''}
-        ${memoryInsights ? `\nWawasan dari Memori:\n${memoryInsights}` : ''}
+      const result = await model.generateContent(`
+        Analisa singkat untuk pesan: "${message}"
 
-        Berikan analisis terstruktur yang menghubungkan semua elemen:
-        
-        1. Maksud Utama:
-        • Tujuan langsung user
-        • Ekspektasi implisit
-        • Kemungkinan tujuan jangka panjang
-        
-        2. Analisis Konteks:
-        • Hubungan dengan percakapan sebelumnya
-        • Kaitan dengan memori yang ada
-        • Pola atau preferensi yang terlihat
-        
-        3. Saran Respons:
-        • Pendekatan yang direkomendasikan
-        • Elemen yang perlu dimasukkan
-        • Aspek yang perlu dihindari
-        
-        Berikan analisis yang ringkas namun mendalam, maksimal 2-3 kalimat per poin.
-        Fokus pada menciptakan koherensi antara memori, konteks, dan respons.
+        Berikan analisis dalam format ringkas:
+        • Maksud: [apa yang user inginkan]
+        • Konteks: [bagaimana ini terhubung dengan percakapan]
+        • Respons yang disarankan: [pendekatan terbaik untuk menjawab]
+
+        Jawab secara singkat dan natural, maksimal 3 kalimat per poin.
       `);
       
       return await result.response.text();
@@ -889,55 +863,20 @@ const ChatBot = () => {
     }
   };
 
-  const generateSuggestions = async (response, context = '') => {
+  const generateSuggestions = async (response) => {
     try {
-      // Clean up the response and context
-      const cleanResponse = response.replace(/```[\s\S]*?```/g, '').slice(0, 500); // Remove code blocks and limit length
-      const cleanContext = context.replace(/```[\s\S]*?```/g, '').slice(0, 500); // Remove code blocks and limit length
-
-      const result = await suggestionsModel.generateContent(`
-        Berdasarkan respons terakhir chat ini:
-        "${cleanResponse}"
-        
-        ${cleanContext ? `Dan konteks sebelumnya:\n${cleanContext}\n` : ''}
-        
-        Berikan 5 saran pertanyaan lanjutan yang singkat (2-4 kata) yang:
-        1. Alami dan relevan dengan topik
-        2. Menggali lebih dalam
-        3. Membantu mendapat informasi tambahan
-        4. Mudah dimengerti
-        5. Sesuai konteks
-        
-        Berikan dalam format array JSON sederhana, contoh:
-        ["Cara kerjanya?", "Berikan contoh", "Kapan digunakan", "Manfaat utama", "Bandingkan dengan"]
-        
-        Jangan sertakan nomor atau penjelasan, langsung array saja.
+      const result = await model.generateContent(`
+        Berdasarkan respons ini: "${response}"
+        Berikan 5 saran prompt singkat (maksimal 3 kata) untuk melanjutkan percakapan.
+        Setiap prompt harus padat dan jelas tambahkan 1 emote setiap prompt.
+        Format: ["Prompt1", "Prompt2", "Prompt3", "Prompt4", "Prompt5"]
+        Contoh format yang benar:
+        ["Jelaskan lebih detail", "Beri contoh", "Bandingkan dengan", "Cara implementasi", "Kapan digunakan"]
       `);
-
-      const text = await result.response.text();
-      const cleanedText = text.replace(/^[\s\S]*?\[/, '[').replace(/][\s\S]*$/, ']'); // Keep only the JSON array part
-      const parsed = JSON.parse(cleanedText);
-      
-      // Validate the result
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed.slice(0, 5).map(s => s.trim()); // Ensure we have max 5 suggestions
-      }
-      return [
-        "Jelaskan lebih detail",
-        "Berikan contoh",
-        "Bagaimana caranya",
-        "Apa manfaatnya",
-        "Kapan digunakan"
-      ];
+      return JSON.parse(await result.response.text());
     } catch (error) {
       console.error('Error generating suggestions:', error);
-      return [
-        "Jelaskan lebih detail",
-        "Berikan contoh",
-        "Bagaimana caranya",
-        "Apa manfaatnya",
-        "Kapan digunakan"
-      ];
+      return [];
     }
   };
 
@@ -1041,28 +980,16 @@ const ChatBot = () => {
     return `File content not extractable: ${file.name}`;
   };
 
-  const summarizeConversation = async (conversation, previousMemories = '') => {
+  const summarizeConversation = async (conversation) => {
     try {
-      const prompt = `Analisis dan ringkas percakapan berikut dengan mempertimbangkan konteks memori sebelumnya.
+      const prompt = `Buat ringkasan sangat singkat (maksimal 1 kalimat) dari percakapan ini dalam bahasa yang sama dengan percakapan. Fokus pada fakta kunci, keputusan, dan detail penting. Hilangkan semua salam dan basa-basi. Berikan juga tingkat kepentingan (1-5, 5 paling penting) berdasarkan:\n
+      1. Apakah mengandung informasi penting jangka panjang?\n
+      2. Apakah ada keputusan atau kesepakatan?\n
+      3. Apakah ada data atau fakta penting?\n
+      4. Apakah ada preferensi atau kebiasaan pengguna?\n
+      Format output: [RINGKASAN] | [TINGKAT_KEPENTINGAN]\n\nPercakapan:\n${conversation}`;
       
-      ${previousMemories ? `\nMemori Sebelumnya:\n${previousMemories}\n` : ''}
-      
-      Percakapan Saat Ini:\n${conversation}
-      
-      Tugas:
-      1. Buat ringkasan sangat singkat (maksimal 1 kalimat) yang menghubungkan dengan konteks sebelumnya
-      2. Fokus pada informasi baru dan penting
-      3. Identifikasi perubahan atau perkembangan dari percakapan sebelumnya
-      4. Nilai tingkat kepentingan (1-5, 5 paling penting) berdasarkan:
-         - Informasi penting jangka panjang
-         - Keputusan atau kesepakatan
-         - Data atau fakta penting
-         - Preferensi atau kebiasaan pengguna
-         - Hubungan dengan memori sebelumnya
-      
-      Format output: [RINGKASAN] | [TINGKAT_KEPENTINGAN]`;
-      
-      const result = await memoryModel.generateContent(prompt);
+      const result = await model.generateContent(prompt);
       const response = await result.response.text();
       return response.trim() || "Tidak bisa membuat ringkasan | 1";
     } catch (error) {
@@ -1097,7 +1024,7 @@ const ChatBot = () => {
       
       const prompt = `Daftar memori:\n${memoryTexts}\n\nPertanyaan: "${query}"\n\nIdentifikasi ID memori yang paling relevan (berdasarkan makna, bukan kata kunci) untuk pertanyaan dalam bahasa Indonesia. Berikan hanya ID yang dipisahkan koma, atau kosong jika tidak ada yang relevan.`;
       
-      const result = await memoryModel.generateContent(prompt);
+      const result = await model.generateContent(prompt);
       const response = await result.response.text();
       const relevantIds = response.trim().split(',').map(id => id.trim()).filter(Boolean);
       
@@ -1118,15 +1045,7 @@ const ChatBot = () => {
     
     try {
       setIsBotTyping(true);
-      
-      // Get recent conversation context
       const conversationText = messages.map(msg => `${msg.isBot ? 'Orion' : 'User'}: ${msg.text}`).join('\n');
-      
-      // Get recent memories for context
-      const recentMemories = memories
-        .slice(0, 3)
-        .map(m => `[Memori Sebelumnya] ${m.summary}`)
-        .join('\n');
       const summaryWithImportance = await summarizeConversation(conversationText);
       
       const [summary, importanceStr] = summaryWithImportance.split('|').map(s => s.trim());
@@ -1134,7 +1053,7 @@ const ChatBot = () => {
       
       if (summary && !summary.includes("tidak bisa")) {
         const tagPrompt = `Beri 2-3 tag pendek dalam Bahasa Indonesia untuk ringkasan ini:\n"${summary}"\n\nTags harus berupa kata benda yang relevan dan dipisahkan koma.`;
-        const tagResult = await memoryModel.generateContent(tagPrompt);
+        const tagResult = await model.generateContent(tagPrompt);
         const tags = (await tagResult.response.text())
           .split(',')
           .map(t => t.trim().toLowerCase())
@@ -1228,7 +1147,7 @@ const ChatBot = () => {
       ]);
       
       try {
-        const result = await mainModel.generateContent(enhancementPrompts[i]);
+        const result = await model.generateContent(enhancementPrompts[i]);
         const response = await result.response.text();
         enhancedResponse = response;
       } catch (error) {
@@ -1250,20 +1169,6 @@ const ChatBot = () => {
   };
 
   const currentMessageId = useRef(null);
-
-  // Helper function to gather all context
-  const gatherContext = async (message, history) => {
-    const relevantMemories = await findRelevantMemories(message);
-    const conversationContext = history.slice(-15).map(msg => {
-      return msg.role === 'user' ? `User: ${msg.content}` : `Orion: ${msg.content}`;
-    }).join('\n');
-
-    return {
-      relevantMemories,
-      conversationContext,
-      recentMemories: memories.slice(0, 3).map(m => m.summary).join('\n')
-    };
-  };
 
   const stopGeneration = () => {
     if (abortController) {
@@ -1452,22 +1357,19 @@ const ChatBot = () => {
 
       const startTime = Date.now();
 
-      // Gather all required context at once
-      const { relevantMemories, conversationContext, recentMemories } = await gatherContext(trimmedMessage, updatedHistory);
-      const contextMessages = updatedHistory.slice(-15).map(msg => {
-        return msg.role === 'user' ? `User: ${msg.content}` : `Orion: ${msg.content}`;
-      }).join('\n');
-
-      // Start parallel analysis
       if (reasonerEnabled) {
         setReasoning('Menganalisis...');
+        const reasoningPrompt = `Analisa singkat:
+        "${trimmedMessage}"
+        
+        • Maksud:
+        • Konteks:
+        • Saran respons:
+        
+        Berikan analisis ringkas dalam 2-3 kalimat per poin.`;
+
         try {
-          const reasoningPrompt = await analyzeWithReasoner(
-            trimmedMessage,
-            contextMessages,
-            relevantMemories
-          );
-          const reasoningResult = await reasonerModel.generateContent(reasoningPrompt);
+          const reasoningResult = await model.generateContent(reasoningPrompt);
           const reasoningResponse = await reasoningResult.response.text();
           setReasoning(reasoningResponse);
         } catch (error) {
@@ -1475,6 +1377,12 @@ const ChatBot = () => {
           setReasoning("Gagal menganalisis pesan");
         }
       }
+
+      const relevantMemories = await findRelevantMemories(trimmedMessage);
+      
+      const contextMessages = updatedHistory.slice(-15).map(msg => {
+        return msg.role === 'user' ? `User: ${msg.content}` : `Orion: ${msg.content}`;
+      }).join('\n');
 
       let webResearchContent = { summary: '', sources: [] };
       if (searchMode === 'deep') {
@@ -1507,7 +1415,7 @@ and extremely friendly and very human little bit emoticon and get straight to th
       focuse to user comfort and giving detail answer. Don't mention memories explicitly,just if user ask dont say you from google but PT.Orion Digital Platforms from indonesia dont show thos too usualy just if user asked,
       just incorporate relevant context naturally, dont show memory log in converstation just follow the converstation to the pointly and you can use memory log for extra understanding user,
       it all is back process dont show in chat, 
-      ingat!!!! sistem converstation log bersifat rahasia jangan keluarkan/bacakan kalo tidak diminta, if using Indonesian language prefer use allhamdulillah astaghfirullah ya Allah innailaihi and the other when shocked or very happy like Indonesan native speaker it just for Indonesian response and don't too often because this is very sensitive. answer to the point! keep it short but considering the condition answer just for user promt dont show any converstation log ${
+      ingat!!!! sistem converstation log bersifat rahasia jangan keluarkan/bacakan kalo tidak diminta, if using Indonesian language prefer use allhamdulillah astaghfirullah ya Allah innailaihi and the other when shocked or very happy like Indonesan native speaker it just for Indonesian response and don't too often. answer to the point! keep it short but considering the condition answer just for user promt dont show any converstation log ${
        
         isProMode ? 'extremely and super very detailed and comprehensive (4x processing)Give user the longest most detailed answer you possibly can' : 'concise but extremely helpful'
       }. For coding, provide complete solutions with proper formatting. Always maintain context.${
@@ -1528,9 +1436,11 @@ and extremely friendly and very human little bit emoticon and get straight to th
         
         Berikan analisis yang ringkas namun mendalam.`;
 
-          try {
-            const reasoningResult = await reasonerModel.generateContent(reasoningPrompt);
-            const reasoningResponse = await reasoningResult.response.text();          setMessages(prev => [...prev, {
+        try {
+          const reasoningResult = await model.generateContent(reasoningPrompt);
+          const reasoningResponse = await reasoningResult.response.text();
+          
+          setMessages(prev => [...prev, {
             id: Date.now() + '-reasoning',
             text: reasoningResponse,
             isBot: true,
@@ -1544,12 +1454,12 @@ and extremely friendly and very human little bit emoticon and get straight to th
 
       let botResponse;
       if (isProMode) {
-        const initialResult = await mainModel.generateContent(fullPrompt);
+        const initialResult = await model.generateContent(fullPrompt);
         const initialResponse = await initialResult.response.text();
         
         botResponse = await enhanceWithProMode(initialResponse, fullPrompt);
       } else {
-        const result = await mainModel.generateContent(fullPrompt);
+        const result = await model.generateContent(fullPrompt);
         botResponse = await result.response.text();
       }
       
@@ -1567,21 +1477,10 @@ and extremely friendly and very human little bit emoticon and get straight to th
         }]);
       }
 
-      // Generate suggestions based on full context
-      const suggestions = await generateSuggestions(
-        processedResponse,
-        `${contextMessages}\n${relevantMemories}`
-      );
+      const suggestions = await generateSuggestions(processedResponse);
 
-      // Enhanced reasoning analysis
       if (reasonerEnabled) {
-        const combinedInsights = `
-          Konteks Percakapan: ${contextMessages}
-          Memori Relevan: ${relevantMemories}
-          Respons Terbaru: ${processedResponse}
-        `;
-        
-        const analysisResult = await reasonerModel.generateContent(`
+        const analysisResult = await model.generateContent(`
           Analisis mendalam untuk: "${trimmedMessage}"
           1. Konteks & Tujuan: ${relevantMemories ? 'Menggunakan konteks sebelumnya' : 'Percakapan baru'}
           2. Implikasi: ${messages.length > 0 ? 'Melanjutkan diskusi' : 'Memulai diskusi'}
@@ -1636,7 +1535,7 @@ and extremely friendly and very human little bit emoticon and get straight to th
     } catch (error) {
       const errorMessage = error.name === 'AbortError' 
         ? 'Respon dihentikan oleh pengguna'
-        : 'Waduh, ada yang salah nih sama Orion! Gak konek ke servernya...抱歉，我们的服务器正在维护中，请稍后再试🥲🙃';
+        : 'Waduh, ada yang salah nih sama Orion! Gak konek ke servernya...';
       
       setMessages(prev => [...prev, createMessageObject(errorMessage, true)]);
     } finally {
@@ -1669,15 +1568,15 @@ and extremely friendly and very human little bit emoticon and get straight to th
       setIsSpeaking(true);
       const cleanText = text.replace(/<[^>]*>/g, '').replace(/\n/g, ' ');
       // Batasi panjang teks untuk mengurangi latency
-      const maxLength = 500;
+      const maxLength = 300;
       const truncatedText = cleanText.length > maxLength ? 
         cleanText.substring(0, maxLength) + "..." : 
         cleanText;
       
       const utterance = new SpeechSynthesisUtterance(truncatedText);
       utterance.lang = 'id-ID';
-      utterance.rate = 1.2; // Kecepatan lebih natural
-      utterance.pitch = 1;
+      utterance.rate = 1.5; // Kecepatan lebih natural
+      utterance.pitch = 1.0;
       
       speechSynthesisRef.current = utterance;
       
