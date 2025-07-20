@@ -700,7 +700,7 @@ const ChatBot = () => {
     }
   };
   // Initialize multiple API instances for different features
-  const mainGenAI = new GoogleGenerativeAI("AIzaSyDSTgkkROL7mjaGKoD2vnc8l2UptNCbvHk");
+  const mainGenAI = new GoogleGenerativeAI("AIzaSyD62mOmUszYLj_OJG5TT077jkFFzj2ZVd4");
   const memoryGenAI = new GoogleGenerativeAI("AIzaSyB9GeiZXHvcui45w4dWpESnpe3WxDk_wxo");
   const suggestionsGenAI = new GoogleGenerativeAI("AIzaSyD62mOmUszYLj_OJG5TT077jkFFzj2ZVd4");
   const reasonerGenAI = new GoogleGenerativeAI("AIzaSyCTkh3sqpWWjGB51HfbkbBXz1KRInIb_VM");
