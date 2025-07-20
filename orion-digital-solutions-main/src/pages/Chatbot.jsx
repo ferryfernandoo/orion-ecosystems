@@ -891,23 +891,53 @@ const ChatBot = () => {
 
   const generateSuggestions = async (response, context = '') => {
     try {
+      // Clean up the response and context
+      const cleanResponse = response.replace(/```[\s\S]*?```/g, '').slice(0, 500); // Remove code blocks and limit length
+      const cleanContext = context.replace(/```[\s\S]*?```/g, '').slice(0, 500); // Remove code blocks and limit length
+
       const result = await suggestionsModel.generateContent(`
-        Berdasarkan respons ini: "${response}"
-        ${context ? `\nKonteks sebelumnya: ${context}` : ''}
+        Berdasarkan respons terakhir chat ini:
+        "${cleanResponse}"
         
-        Berikan 5 saran prompt singkat (maksimal 3 kata) yang:
-        1. Melanjutkan alur percakapan dengan natural
-        2. Mempertimbangkan konteks sebelumnya
-        3. Menggali lebih dalam topik yang sedang dibahas
-        4. Membantu user mendapat informasi lebih lengkap
+        ${cleanContext ? `Dan konteks sebelumnya:\n${cleanContext}\n` : ''}
         
-        Format: ["Prompt1", "Prompt2", "Prompt3", "Prompt4", "Prompt5"]
-        Pastikan saran sesuai dengan konteks dan alur pembicaraan.
+        Berikan 5 saran pertanyaan lanjutan yang singkat (2-4 kata) yang:
+        1. Alami dan relevan dengan topik
+        2. Menggali lebih dalam
+        3. Membantu mendapat informasi tambahan
+        4. Mudah dimengerti
+        5. Sesuai konteks
+        
+        Berikan dalam format array JSON sederhana, contoh:
+        ["Cara kerjanya?", "Berikan contoh", "Kapan digunakan", "Manfaat utama", "Bandingkan dengan"]
+        
+        Jangan sertakan nomor atau penjelasan, langsung array saja.
       `);
-      return JSON.parse(await result.response.text());
+
+      const text = await result.response.text();
+      const cleanedText = text.replace(/^[\s\S]*?\[/, '[').replace(/][\s\S]*$/, ']'); // Keep only the JSON array part
+      const parsed = JSON.parse(cleanedText);
+      
+      // Validate the result
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed.slice(0, 5).map(s => s.trim()); // Ensure we have max 5 suggestions
+      }
+      return [
+        "Jelaskan lebih detail",
+        "Berikan contoh",
+        "Bagaimana caranya",
+        "Apa manfaatnya",
+        "Kapan digunakan"
+      ];
     } catch (error) {
       console.error('Error generating suggestions:', error);
-      return [];
+      return [
+        "Jelaskan lebih detail",
+        "Berikan contoh",
+        "Bagaimana caranya",
+        "Apa manfaatnya",
+        "Kapan digunakan"
+      ];
     }
   };
 
