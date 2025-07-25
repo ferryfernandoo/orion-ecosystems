@@ -1575,7 +1575,7 @@ and extremely friendly and very human little bit emoticon and get straight to th
       
       const utterance = new SpeechSynthesisUtterance(truncatedText);
       utterance.lang = 'id-ID';
-      utterance.rate = 1.5; // Kecepatan lebih natural
+      utterance.rate = 1.2; // Kecepatan lebih natural
       utterance.pitch = 1.0;
       
       speechSynthesisRef.current = utterance;
