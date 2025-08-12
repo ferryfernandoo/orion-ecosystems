@@ -699,7 +699,7 @@ const ChatBot = () => {
       recognitionRef.current.waitingForResponse = false;
     }
   };
-  const genAI = new GoogleGenerativeAI("AIzaSyDSTgkkROL7mjaGKoD2vnc8l2UptNCbvHk");
+  const genAI = new GoogleGenerativeAI("AIzaSyB9GeiZXHvcui45w4dWpESnpe3WxDk_wxo");
   const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
   const analyzeWithReasoner = async (message) => {
