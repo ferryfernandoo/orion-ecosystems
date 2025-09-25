@@ -1,2934 +1,674 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import PropTypes from 'prop-types';
+import React, { useState, useEffect, useRef } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { FiSend } from 'react-icons/fi';
 import DOMPurify from 'dompurify';
-import { motion, AnimatePresence, useAnimation } from 'framer-motion';
-import { GoogleGenerativeAI } from "@google/generative-ai";
-import { 
-  FiCopy, FiSend, FiPlus, FiX, FiImage, FiFile, FiTrash2, 
-  FiClock, FiCpu, FiSettings, FiZap, FiStopCircle, FiMessageSquare,
-  FiSun, FiMoon, FiSearch, FiDatabase, FiAward, FiChevronDown, FiChevronUp, FiChevronRight, FiGlobe,
-  FiExternalLink, FiCheck, FiInfo, FiStar, FiAlertTriangle,
-  FiVolume2, FiVolumeX, FiMic
-} from 'react-icons/fi';
-import { RiSendPlaneFill, RiBrainLine } from 'react-icons/ri';
+// Optional SDK import. Note: the SDK may not work in browser environments; fallback to REST is implemented below.
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
-// OCR API integration (using free OCR.space API)
-const extractTextFromImage = async (file) => {
-  const formData = new FormData();
-  formData.append('file', file);
-  formData.append('language', 'eng');
-  formData.append('isOverlayRequired', 'false');
-  formData.append('OCREngine', '2'); // Engine 2 is more accurate
-
-  try {
-    const response = await fetch('https://api.ocr.space/parse/image', {
-      method: 'POST',
-      headers: {
-        'apikey': 'K82849142388957' // Free API key (500 calls/month)
-      },
-      body: formData
-    });
-    
-    const data = await response.json();
-    if (data.IsErroredOnProcessing) {
-      throw new Error(data.ErrorMessage || 'OCR processing failed');
-    }
-    
-    return data.ParsedResults?.[0]?.ParsedText || "Could not extract text from image";
-  } catch (error) {
-    console.error("OCR Error:", error);
-    return "Error extracting text from image";
-  }
-};
-
-// PDF text extraction using pdf.js (client-side)
-const extractTextFromPDF = async (file) => {
-  return new Promise((resolve) => {
-    // Simulating for demo purposes
-    setTimeout(() => {
-      resolve(`Extracted text from PDF: ${file.name}\n\nThis is a simulated PDF extraction result. In a real app, we would use pdf.js to extract all text content from the PDF document.`);
-    }, 1500);
-  });
-};
-
-// Enhanced web search with multiple APIs
-const performWebSearch = async (query) => {
-  try {
-    // First try DuckDuckGo
-    const ddgResponse = await fetch(`https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1`);
-    const ddgData = await ddgResponse.json();
-    
-    let results = ddgData.RelatedTopics
-      .filter(topic => topic.FirstURL && topic.Text)
-      .map(topic => ({
-        title: topic.Text.replace(/<[^>]*>?/gm, ''),
-        url: topic.FirstURL,
-        snippet: topic.Text.replace(/<[^>]*>?/gm, ''),
-        source: 'DuckDuckGo'
-      }));
-      
-    
-    // If no results, try Wikipedia API
-    if (results.length < 3) {
-      try {
-        const wikiResponse = await fetch(`https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(query)}&format=json&origin=*`);
-        const wikiData = await wikiResponse.json();
-        
-        const wikiResults = wikiData.query?.search?.slice(0, 3).map(item => ({
-          title: item.title,
-          url: `https://en.wikipedia.org/wiki/${encodeURIComponent(item.title.replace(/ /g, '_'))}`,
-          snippet: item.snippet,
-          source: 'Wikipedia'
-        })) || [];
-        
-        results = [...results, ...wikiResults];
-      } catch (wikiError) {
-        console.log("Wikipedia search failed:", wikiError);
-      }
-    }
-    
-    return results.slice(0, 5); // Return top 5 results
-  } catch (error) {
-    console.error("Search error:", error);
-    return [];
-  }
-};
-
-const scrapeWebsiteContent = async (url) => {
-  try {
-    // In production, use a backend service for scraping
-    const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
-    const response = await fetch(proxyUrl);
-    const data = await response.json();
-    
-    if (data.contents) {
-      const parser = new DOMParser();
-      const doc = parser.parseFromString(data.contents, 'text/html');
-      
-      // Remove unwanted elements
-      const unwantedElements = doc.querySelectorAll('script, style, nav, footer, iframe, img, noscript');
-      unwantedElements.forEach(el => el.remove());
-      
-      // Get main content
-      const mainContent = doc.body.textContent
-        .replace(/\s+/g, ' ')
-        .trim()
-        .substring(0, 3000);
-      
-      return mainContent;
-    }
-    return "Could not retrieve website content";
-  } catch (error) {
-    console.error("Scraping error:", error);
-    return "Error retrieving website content";
-  }
-};
-
-const TypingAnimation = () => (
-  <motion.div 
-    className="flex space-x-2 items-center p-4 rounded-lg bg-blue-50 dark:bg-blue-900/20"
-    initial={{ opacity: 0, y: 10 }}
-    animate={{ opacity: 1, y: 0 }}
-    exit={{ opacity: 0, y: -10 }}
-  >
-    <motion.div
-      className="w-3 h-3 bg-blue-500 rounded-full"
-      animate={{
-        scale: [1, 1.2, 1],
-        opacity: [0.5, 1, 0.5]
-      }}
-      transition={{
-        duration: 1,
-        repeat: Infinity,
-        ease: "easeInOut"
-      }}
-    />
-    <motion.div
-      className="w-3 h-3 bg-blue-500 rounded-full"
-      animate={{
-        scale: [1, 1.2, 1],
-        opacity: [0.5, 1, 0.5]
-      }}
-      transition={{
-        duration: 1,
-        repeat: Infinity,
-        ease: "easeInOut",
-        delay: 0.2
-      }}
-    />
-    <motion.div
-      className="w-3 h-3 bg-blue-500 rounded-full"
-      animate={{
-        scale: [1, 1.2, 1],
-        opacity: [0.5, 1, 0.5]
-      }}
-      transition={{
-        duration: 1,
-        repeat: Infinity,
-        ease: "easeInOut",
-        delay: 0.4
-      }}
-    />
-  </motion.div>
-);
-
-const TypingDots = () => (
-  <div className="inline-flex items-center gap-1 bg-gray-200 dark:bg-gray-700 px-3 py-2 rounded-full">
-    <div className="w-2 h-2 rounded-full bg-gray-500 dark:bg-gray-300 typing-dot"></div>
-    <div className="w-2 h-2 rounded-full bg-gray-500 dark:bg-gray-300 typing-dot"></div>
-    <div className="w-2 h-2 rounded-full bg-gray-500 dark:bg-gray-300 typing-dot"></div>
-  </div>
-);
-
-// Function to format JSON for display
-const formatJSON = (jsonString) => {
-  try {
-    const parsed = JSON.parse(jsonString);
-    return JSON.stringify(parsed, null, 2);
-  } catch (e) {
-    return jsonString;
-  }
-};
-
-// Function to detect and format code blocks
-const getContextEmoji = (content) => {
-  const contentLower = content.toLowerCase();
-  
-  // Health & Wellness
-  if (contentLower.includes('kesehatan')) return '💪';
-  if (contentLower.includes('vitamin')) return '💊';
-  if (contentLower.includes('mata')) return '👁️';
-  if (contentLower.includes('kulit')) return '✨';
-  if (contentLower.includes('pencernaan')) return '🌿';
-  if (contentLower.includes('kanker')) return '🎗️';
-  if (contentLower.includes('nutrisi')) return '🥗';
-  
-  // Food & Diet
-  if (contentLower.includes('makanan')) return '🍽️';
-  if (contentLower.includes('buah')) return '🍎';
-  if (contentLower.includes('sayur')) return '🥬';
-  if (contentLower.includes('diet')) return '🥗';
-  
-  // Benefits & Improvements
-  if (contentLower.includes('manfaat')) return '✨';
-  if (contentLower.includes('meningkatkan')) return '📈';
-  if (contentLower.includes('membantu')) return '🤝';
-  if (contentLower.includes('mencegah')) return '🛡️';
-  
-  return '📌'; // default emoji
-};
-
-const formatMessage = (text) => {
-  if (!text) return '';
-
-  // Replace bullet points with context-aware emojis
-  text = text.replace(/^\s*\*\s+(.+)$/gm, (match, content) => {
-    const emoji = getContextEmoji(content);
-    
-    // Choose emoji based on content keywords
-    if (content.toLowerCase().includes('modal')) emoji = '�';
-    else if (content.toLowerCase().includes('belanja') || content.toLowerCase().includes('beli')) emoji = '�';
-    else if (content.toLowerCase().includes('penjualan') || content.toLowerCase().includes('pendapatan')) emoji = '�';
-    else if (content.toLowerCase().includes('pengeluaran')) emoji = '💸';
-    else if (content.toLowerCase().includes('total')) emoji = '📊';
-    else if (content.toLowerCase().includes('laporan')) emoji = '📑';
-    else if (content.toLowerCase().includes('uang')) emoji = '💲';
-    else if (content.toLowerCase().includes('harga')) emoji = '🏷️';
-    
-    return `${emoji} ${content}`;
-  });
-  
-  // Replace code blocks with syntax highlighting
-  text = text.replace(/```(\w+)?\n([\s\S]*?)```/g, (match, language, code) => {
-    return `<div class="code-container">
-      <div class="code-toolbar">
-        <span class="language-tag">${language || 'text'}</span>
-        <button class="copy-button" onclick="navigator.clipboard.writeText(\`${code.trim()}\`)">
-          <span>Copy</span>
-        </button>
-      </div>
-      <pre class="code-block"><code class="language-${language || 'text'}">${code.trim()}</code></pre>
-    </div>`;
-  });
-
-  // Check if it's an ASCII table
-  if (text.includes('+---') || text.includes('+-+-')) {
-    return `<div class="ascii-table-container"><pre class="ascii-table">${text}</pre></div>`;
-  }
-
-  // Format tables if they exist in markdown format
-  text = text.replace(/(\|.*\|\n)+/g, (table) => {
-    const rows = table.split('\n').filter(row => row.trim() && row.includes('|'));
-    if (rows.length < 2) return table;
-
-    // Clean up and normalize the table data
-    const processedRows = rows.map(row => {
-      return row
-        .split('|')
-        .map(cell => cell.trim())
-        .filter(cell => cell !== '');
-    });
-
-    const headers = processedRows[0];
-    const alignments = processedRows[1]?.map(cell => {
-      if (cell.startsWith(':') && cell.endsWith(':')) return 'center';
-      if (cell.endsWith(':')) return 'right';
-      return 'left';
-    }) || headers.map(() => 'left');
-
-    const dataRows = processedRows.slice(processedRows[1]?.every(cell => cell.includes('-')) ? 2 : 1);
-
-    let tableHtml = '<div class="table-container"><div class="table-wrapper"><table class="markdown-table">';
-    
-    // Headers
-    tableHtml += '<thead><tr>';
-    headers.forEach((header, i) => {
-      const align = alignments[i]?.includes(':') ? 'left' : 'center';
-      tableHtml += `<th style="text-align: ${align}">${header.trim()}</th>`;
-    });
-    tableHtml += '</tr></thead>';
-
-    // Data rows
-    if (dataRows.length) {
-      tableHtml += '<tbody>';
-      dataRows.forEach(row => {
-        const cells = row.split('|').filter(cell => cell.trim());
-        tableHtml += '<tr>';
-        cells.forEach((cell, i) => {
-          const align = alignments[i]?.includes(':') ? 'left' : 'center';
-          tableHtml += `<td style="text-align: ${align}">${cell.trim()}</td>`;
-        });
-        tableHtml += '</tr>';
-      });
-      tableHtml += '</tbody>';
-    }
-
-    tableHtml += '</table></div>';
-    return tableHtml;
-  });
-
-  // Format JSON if detected and convert to table if possible
-  text = text.replace(/```json\n([\s\S]*?)```/g, (match, json) => {
-    try {
-      const parsed = JSON.parse(json);
-      
-      // Check if JSON is an array of objects that can be converted to a table
-      if (Array.isArray(parsed) && parsed.length > 0 && typeof parsed[0] === 'object') {
-        const headers = Object.keys(parsed[0]);
-        
-        // Create table headers
-        let tableHtml = '<div class="table-container"><div class="table-wrapper">';
-        tableHtml += '<div class="table-title">Data Table</div>';
-        tableHtml += '<table class="markdown-table">';
-        tableHtml += '<thead><tr>';
-        headers.forEach(header => {
-          const formattedHeader = header
-            .split('_')
-            .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-            .join(' ');
-          tableHtml += `<th>${formattedHeader}</th>`;
-        });
-        tableHtml += '</tr></thead><tbody>';
-
-        // Create table rows
-        parsed.forEach(row => {
-          tableHtml += '<tr>';
-          headers.forEach(header => {
-            const value = row[header];
-            const cellContent = value === null || value === undefined ? '-' : value.toString();
-            tableHtml += `<td>${cellContent}</td>`;
-          });
-          tableHtml += '</tr>';
-        });
-
-        tableHtml += '</tbody></table></div></div>';
-        return tableHtml;
-      }
-
-      // If not a table-like JSON, format as regular JSON code block
-      const formatted = formatJSON(json);
-      return `<div class="code-container">
-        <div class="code-toolbar">
-          <span class="language-tag">json</span>
-          <button class="copy-button" onclick="navigator.clipboard.writeText(\`${formatted}\`)">
-            <span>Copy</span>
-          </button>
-        </div>
-        <pre class="code-block"><code class="language-json">${formatted}</code></pre>
-      </div>`;
-    } catch (e) {
-      return match;
-    }
-  });
-
-  return text;
-};
-
-const ChatMessage = ({ message, isUser, currentMessageId }) => {
-  const controls = useAnimation();
-  const messageRef = useRef(null);
-  
-  useEffect(() => {
-    if (messageRef.current) {
-      const observer = new IntersectionObserver(
-        ([entry]) => {
-          if (entry.isIntersecting) {
-            controls.start({
-              opacity: 1,
-              y: 0,
-              scale: 1,
-              transition: {
-                type: "spring",
-                damping: 20,
-                stiffness: 100,
-              }
-            });
-          }
-        },
-        { threshold: 0.1 }
-      );
-      
-      observer.observe(messageRef.current);
-      return () => observer.disconnect();
-    }
-  }, [controls]);
-
-  // Message render effect
-  useEffect(() => {
-    // Handle message render animations if needed
-  }, [isUser, message.isBot]);
-
-  return (
-    <motion.div
-      ref={messageRef}
-      initial={{ opacity: 0, y: 50, scale: 0.9 }}
-      animate={controls}          className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-4`}
-    >
-      <motion.div
-        className={`rounded-lg p-4 max-w-[80%] transition-all duration-300 ${
-          isUser 
-            ? 'bg-blue-500 text-white bg-opacity-90 ml-auto shadow-blue-500/20' 
-            : 'bg-white dark:bg-gray-800 dark:text-white bg-opacity-90 dark:bg-opacity-90 shadow-lg'
-        }`}
-        whileHover={{ scale: 1.02 }}
-        transition={{ type: "spring", stiffness: 400, damping: 25 }}
-      >
-        {message.isBot && (
-          <div className="flex items-center mb-2">
-            <div className="w-6 h-6 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center mr-2 shadow">
-              <span className="text-xs text-white">AI</span>
-            </div>
-            <span className="text-sm font-medium">Orion</span>
-          </div>
-        )}
-        
-        {message.file ? (
-          <div>
-            <p className={`text-xs mb-1 ${message.isBot ? 'text-gray-500' : 'text-blue-100'}`}>File: {message.file.name}</p>
-            {message.file.type.startsWith('image/') && (
-              <img 
-                src={URL.createObjectURL(message.file)} 
-                alt="Uploaded" 
-                className="mt-1 max-w-full h-auto rounded-lg border border-gray-200 shadow-sm" 
-              />
-            )}
-          </div>
-        ) : (
-          <div 
-            className="text-sm whitespace-pre-wrap break-words prose"
-            dangerouslySetInnerHTML={{ __html: formatMessage(message.text) }}
-          />
-        )}
-
-        {message.reasoner && (
-          <div className="mt-2 text-xs text-gray-500">
-            <details>
-              <summary className="cursor-pointer hover:text-gray-700 dark:hover:text-gray-300">
-                AI Analysis
-              </summary>
-              <div className="mt-2 pl-2 border-l-2 border-gray-300 dark:border-gray-700">
-                {message.reasoner}
-              </div>
-            </details>
-          </div>
-        )}
-      </motion.div>
-    </motion.div>
-  );
-};
-
-const ChatBot = () => {
-  const [showReasonerId, setShowReasonerId] = useState(null);
-  const [chatRooms, setChatRooms] = useState([]);
-  const [currentRoomId, setCurrentRoomId] = useState(null);
+export default function Chatbot() {
+  // Start with no pre-seeded system/assistant prompts so the AI behaves without a fixed persona
   const [messages, setMessages] = useState([]);
-  const [inputMessage, setInputMessage] = useState('');
-  const [isBotTyping, setIsBotTyping] = useState(false);
-  const [ttsEnabled, setTtsEnabled] = useState(false);
-  const [isSpeaking, setIsSpeaking] = useState(false);
-  const [reasonerEnabled, setReasonerEnabled] = useState(false);
-  const [reasoning, setReasoning] = useState('');
-  const [suggestedPrompts, setSuggestedPrompts] = useState([]);
-  const [currentPage, setCurrentPage] = useState(1);
-  const messagesPerPage = 50;
-  const maxStoredMessages = 200;
-  const [showTemplateButtons, setShowTemplateButtons] = useState(true);
-  const [showFileOptions, setShowFileOptions] = useState(false);
-  const [pendingFiles, setPendingFiles] = useState([]);
-  const [hideSuggestions, setHideSuggestions] = useState(false);
-  const [chatHistory, setChatHistory] = useState([]);
-  const [showMemoryPanel, setShowMemoryPanel] = useState(false);
-  const [memories, setMemories] = useState([]);
-  const [isProMode, setIsProMode] = useState(false);
-  const [abortController, setAbortController] = useState(null);
-  const [showChatHistory, setShowChatHistory] = useState(false);
-  const [darkMode, setDarkMode] = useState(false);
-  const [fileProcessing, setFileProcessing] = useState(false);
-  const [processingSources, setProcessingSources] = useState([]);
-  const [autoScroll, setAutoScroll] = useState(true);
-  const [showScrollButton, setShowScrollButton] = useState(false);
-  const [searchMode, setSearchMode] = useState(false);
-  const [searchResults, setSearchResults] = useState([]);
-  const [copiedMessageId, setCopiedMessageId] = useState(null);
-  const [memoryImportanceFilter, setMemoryImportanceFilter] = useState('all');
-  const [showMemoryDetails, setShowMemoryDetails] = useState(null);
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [blurStrength, setBlurStrength] = useState(0);
-  const [showTypingAnimation, setShowTypingAnimation] = useState(false);
-  const [isListening, setIsListening] = useState(false);
-  const recognitionRef = useRef(null);
-  
-  const messagesEndRef = useRef(null);
-  const textareaRef = useRef(null);
-  const chatContainerRef = useRef(null);
-  const messageCountRef = useRef(0);
-  const controls = useAnimation();
-  const speechSynthesisRef = useRef(null);
+  const [archived, setArchived] = useState([]);
+  const [showHistory, setShowHistory] = useState(false);
+  const [input, setInput] = useState('');
+  const [loading, setLoading] = useState(false);
+  const refBottom = useRef(null);
+  const chatScrollRef = useRef(null);
+  const typingPlaceholderId = useRef(null);
+  const revealAnimRef = useRef(null);
+  const isUserScrollingRef = useRef(false);
+  const userScrollTimerRef = useRef(null);
+  // Debug flag: enable by visiting the app with ?debug=1
+  const DEBUG_SCROLL = typeof window !== 'undefined' && (new URLSearchParams(window.location.search).get('debug') === '1');
+  const [debugMetrics, setDebugMetrics] = useState({ scrollTop: 0, scrollHeight: 0, clientHeight: 0, nearBottom: false });
+  // Local in-browser memory (lightweight) stored as array of { id, userText, assistantText, ts }
+  const memoriesRef = useRef([]);
+  const MEMORY_KEY = 'orionai_memories_v1';
 
-  const startVoiceRecognition = () => {
-    if (!recognitionRef.current) {
-      recognitionRef.current = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
-      
-      // Configuration
-      recognitionRef.current.continuous = true;
-      recognitionRef.current.interimResults = true;
-      recognitionRef.current.lang = 'id-ID';
-      
-      // Enhanced state tracking
-      recognitionRef.current.isProcessing = false;
-      recognitionRef.current.waitingForResponse = false;
-      recognitionRef.current.accumulatedText = '';
-      recognitionRef.current.minWordCount = 2; // Reduced for more natural conversation
-      recognitionRef.current.silenceThreshold = 1800; // 1.8 seconds of silence
-      recognitionRef.current.maxAccumulationTime = 8000; // 8 seconds max for one utterance
-      recognitionRef.current.lastSpeechTime = Date.now();
-      recognitionRef.current.autoRestart = true;
-      recognitionRef.current.activeTimeout = null;
-      recognitionRef.current.accumulationTimeout = null;
-
-      recognitionRef.current.onstart = () => {
-        console.log('Voice recognition started');
-        setIsListening(true);
-      };
-
-      recognitionRef.current.onresult = (event) => {
-        // Skip if system is busy
-        if (recognitionRef.current.isProcessing || 
-            recognitionRef.current.waitingForResponse ||
-            speechSynthesisRef.current?.speaking) {
-          return;
-        }
-        
-        // Clear any pending timeouts
-        clearTimeout(recognitionRef.current.activeTimeout);
-        clearTimeout(recognitionRef.current.accumulationTimeout);
-        
-        // Process results
-        const transcript = Array.from(event.results)
-          .map(result => result[0])
-          .map(result => result.transcript)
-          .join(' ');
-        
-        // Update accumulated text
-        recognitionRef.current.accumulatedText = transcript;
-        setInputMessage(transcript);
-        
-        // Handle final results
-        if (event.results[event.results.length - 1].isFinal) {
-          recognitionRef.current.lastSpeechTime = Date.now();
-          
-          // Start accumulation timeout (if user continues speaking)
-          recognitionRef.current.accumulationTimeout = setTimeout(() => {
-            processFinalSpeech();
-          }, recognitionRef.current.silenceThreshold);
-          
-          // Start maximum accumulation time timeout
-          recognitionRef.current.activeTimeout = setTimeout(() => {
-            processFinalSpeech();
-          }, recognitionRef.current.maxAccumulationTime);
-        }
-      };
-
-      const processFinalSpeech = () => {
-        const transcript = recognitionRef.current.accumulatedText;
-        const wordCount = transcript.trim().split(/\s+/).length;
-        
-        if (!recognitionRef.current.isProcessing && 
-            !recognitionRef.current.waitingForResponse &&
-            wordCount >= recognitionRef.current.minWordCount) {
-          
-          recognitionRef.current.isProcessing = true;
-          recognitionRef.current.waitingForResponse = true;
-          
-          try {
-            recognitionRef.current.stop();
-          } catch (error) {
-            console.error('Error stopping recognition:', error);
-          }
-          
-          // Send message and prepare for next input
-          handleSendMessage(transcript).then(() => {
-            recognitionRef.current.waitingForResponse = false;
-            setInputMessage('');
-            recognitionRef.current.accumulatedText = '';
-            
-            // Auto-restart if still in listening mode
-            if (isListening) {
-              safeRestartRecognition();
-            }
-          }).catch(error => {
-            console.error('Error sending message:', error);
-            recognitionRef.current.waitingForResponse = false;
-            safeRestartRecognition();
-          });
-        } else {
-          // Not enough words, reset and continue listening
-          recognitionRef.current.accumulatedText = '';
-          setInputMessage('');
-        }
-      };
-
-      const safeRestartRecognition = () => {
-        recognitionRef.current.isProcessing = false;
-        
-        if (!isListening) return;
-        
-        // Wait for TTS to finish if it's speaking
-        if (speechSynthesisRef.current?.speaking) {
-          const checkInterval = setInterval(() => {
-            if (!speechSynthesisRef.current?.speaking) {
-              clearInterval(checkInterval);
-              try {
-                recognitionRef.current.start();
-              } catch (error) {
-                console.error('Error restarting recognition:', error);
-              }
-            }
-          }, 300);
-        } else {
-          try {
-            recognitionRef.current.start();
-          } catch (error) {
-            console.error('Error restarting recognition:', error);
-          }
-        }
-      };
-
-      recognitionRef.current.onend = () => {
-        if (isListening && recognitionRef.current.autoRestart) {
-          safeRestartRecognition();
-        }
-      };
-
-      recognitionRef.current.onerror = (event) => {
-        console.error('Voice recognition error:', event.error);
-        
-        switch (event.error) {
-          case 'no-speech':
-          case 'audio-capture':
-            // Temporary issues, try to restart
-            recognitionRef.current.isProcessing = false;
-            safeRestartRecognition();
-            break;
-            
-          case 'network':
-          case 'service-not-allowed':
-          case 'not-allowed':
-            // Permanent issues, stop completely
-            stopVoiceRecognition();
-            recognitionRef.current.autoRestart = false;
-            break;
-            
-          default:
-            recognitionRef.current.isProcessing = false;
-            safeRestartRecognition();
-        }
-      };
-    }
-
-    // Initial start
+  // Load memories from localStorage once
+  useEffect(() => {
     try {
-      recognitionRef.current.start();
-    } catch (error) {
-      console.error('Error starting voice recognition:', error);
-      // Attempt recovery after delay
-      setTimeout(() => {
-        if (isListening) {
-          startVoiceRecognition();
-        }
-      }, 1000);
+      const raw = window.localStorage.getItem(MEMORY_KEY);
+      if (raw) memoriesRef.current = JSON.parse(raw) || [];
+    } catch (e) {
+      memoriesRef.current = [];
     }
+  }, []);
+
+  // Helper: simple tokenizer
+  const tokenize = (s) => String(s || '').toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+
+  // Build term frequency map
+  const tf = (tokens) => {
+    const m = Object.create(null);
+    for (const t of tokens) m[t] = (m[t] || 0) + 1;
+    return m;
   };
 
-  const stopVoiceRecognition = () => {
-    if (recognitionRef.current) {
-      recognitionRef.current.autoRestart = false;
-      clearTimeout(recognitionRef.current.activeTimeout);
-      clearTimeout(recognitionRef.current.accumulationTimeout);
-      
-      try {
-        recognitionRef.current.stop();
-      } catch (error) {
-        console.error('Error stopping recognition:', error);
+  // Cosine similarity between two term-frequency maps
+  const cosineSim = (a, b) => {
+    let dot = 0, na = 0, nb = 0;
+    for (const k in a) {
+      na += a[k] * a[k];
+      if (b[k]) dot += a[k] * b[k];
+    }
+    for (const k in b) nb += b[k] * b[k];
+    if (na === 0 || nb === 0) return 0;
+    return dot / (Math.sqrt(na) * Math.sqrt(nb));
+  };
+
+  // Find best memory match for a query; returns {score, memory}
+  const findBestMemory = (query) => {
+    const qTokens = tokenize(query);
+    const qtf = tf(qTokens);
+    let best = { score: 0, memory: null };
+    for (const mem of memoriesRef.current) {
+      const mtokens = tokenize(mem.userText);
+      const mtf = tf(mtokens);
+      const s = cosineSim(qtf, mtf);
+      if (s > best.score) best = { score: s, memory: mem };
+    }
+    return best;
+  };
+
+  // Return top N memories with their similarity scores
+  const findTopMemories = (query, n = 3) => {
+    const qTokens = tokenize(query);
+    const qtf = tf(qTokens);
+    const scored = [];
+    for (const mem of memoriesRef.current) {
+      const mtokens = tokenize(mem.userText);
+      const mtf = tf(mtokens);
+      const s = cosineSim(qtf, mtf);
+      scored.push({ score: s, memory: mem });
+    }
+    scored.sort((a, b) => b.score - a.score);
+    return scored.slice(0, n);
+  };
+
+  // Format assistant raw text into tidy HTML: bullets, key-value pairs, paragraphs
+  const formatAssistantOutput = (text) => {
+    // Normalize input and aggressively clean markdown artifacts / stray asterisks
+    let s = String(text || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n').trim();
+    if (!s) return '';
+
+    // Normalize common bullet characters to '-' (so later list detection works)
+    s = s.replace(/^[\s]*[\*•]\s+/gm, '- ');
+    // Convert headings (#) to bold lines
+    s = s.replace(/^\s*#{1,6}\s*(.+)$/gm, (m, p1) => `**${p1.trim()}**`);
+    // Convert inline code markers to <code>
+    s = s.replace(/`([^`]+)`/g, '<code>$1</code>');
+    // Convert bold **text** and italics *text* (inline)
+    s = s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+    // Only convert single-star italics where it's not a list marker (we normalized list markers)
+    s = s.replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, '<em>$1</em>');
+    // Remove sequences of 3 or more stars that may remain
+    s = s.replace(/\*{3,}/g, '');
+    // Remove stray leftover stars not part of formatting
+    s = s.replace(/(^|\s)\*(?=\s|$)/g, ' ');
+
+    const lines = s.split('\n').map(l => l.trim()).filter(Boolean);
+
+    // If most lines start with '-' or '*' or a numbered list, render as list
+    const bulletLines = lines.filter(l => /^([-*]|\d+\.)\s+/.test(l));
+    if (bulletLines.length >= Math.max(2, Math.floor(lines.length * 0.5))) {
+      // decide ordered vs unordered
+      const ordered = bulletLines.every(l => /^\d+\./.test(l));
+  const items = lines.map(l => l.replace(/^([-*]|\d+\.)\s+/, '')).map(s => `<li style="margin-bottom:12px">${s}</li>`).join('');
+  // increase margin so visual newline looks wider
+  return `<${ordered ? 'ol' : 'ul'} style="padding-left:18px;margin:22px 0 0 0;line-height:1.6">${items}</${ordered ? 'ol' : 'ul'}>`;
+    }
+
+    // If many lines are key: value, render definition list
+    const kvLines = lines.filter(l => /^[^\s].*:\s*/.test(l));
+    if (kvLines.length >= Math.max(2, Math.floor(lines.length * 0.4))) {
+      const parts = kvLines.map(l => {
+        const idx = l.indexOf(':');
+        const key = l.slice(0, idx).trim();
+        let val = l.slice(idx + 1).trim();
+        // strip leading punctuation/bullets (e.g., '*', '-', '•') that sometimes follow ':'
+        val = val.replace(/^[^\w\d]+/, '').trim();
+        return `<dt style="font-weight:600;margin-top:16px">${key}</dt><dd style="margin:0 0 18px 14px">${val}</dd>`;
+      }).join('');
+      return `<dl style="margin:22px 0">${parts}</dl>`;
+    }
+
+    // Single key:value line (e.g., "Hidrasi: masih sama") -> render as bold label + value
+    if (kvLines.length === 1 && lines.length === 1) {
+      const l = kvLines[0];
+      const idx = l.indexOf(':');
+      const key = l.slice(0, idx).trim();
+      let val = l.slice(idx + 1).trim();
+      val = val.replace(/^[^\w\d]+/, '').trim();
+  return `<p style="margin:22px 0"><strong>${key}</strong>: ${val}</p>`;
+    }
+
+    // If multiple short lines, present as a simple bulleted list
+    const shortLines = lines.filter(l => l.length < 80);
+    if (lines.length > 1 && shortLines.length === lines.length && lines.length <= 8) {
+  const items = lines.map(s => `<li style="margin-bottom:12px">${s}</li>`).join('');
+  return `<ul style="padding-left:18px;margin:22px 0 0 0;line-height:1.6">${items}</ul>`;
+    }
+
+    // Single-line with commas and short items -> convert to list
+    if (lines.length === 1 && lines[0].includes(',') ) {
+      const parts = lines[0].split(',').map(p => p.trim()).filter(Boolean);
+      if (parts.length >= 2 && parts.every(p => p.length < 60)) {
+  const items = parts.map(s => `<li style="margin-bottom:12px">${s}</li>`).join('');
+  return `<ul style="padding-left:18px;margin:22px 0 0 0;line-height:1.6">${items}</ul>`;
       }
-      
-      setIsListening(false);
-      setInputMessage('');
-      recognitionRef.current.accumulatedText = '';
-      recognitionRef.current.isProcessing = false;
-      recognitionRef.current.waitingForResponse = false;
     }
-  };
-  const genAI = new GoogleGenerativeAI("AIzaSyB9GeiZXHvcui45w4dWpESnpe3WxDk_wxo");
-  const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
-  const analyzeWithReasoner = async (message) => {
-    if (!reasonerEnabled) return null;
-    
+    // Otherwise convert double line breaks into paragraphs and single newlines to <br>
+  const cleaned = s.replace(/\*{2,}/g, '').replace(/\s{2,}/g, ' ').replace(/[\-]{3,}/g, '—');
+  // Use larger paragraph margins so visual "newlines" appear farther apart (approx 3-4 empty lines)
+  const paragraphs = cleaned.split(/\n\s*\n/).map(p => p.trim()).filter(Boolean).map(p => `<p style="margin:24px 0;line-height:1.6">${p.replace(/\n/g, '<br/>')}</p>`).join('');
+  return paragraphs;
+  };
+
+  // Save a new memory (cap size)
+  const saveMemory = (userText, assistantText) => {
     try {
-      const result = await model.generateContent(`
-        Analisa singkat untuk pesan: "${message}"
-
-        Berikan analisis dalam format ringkas:
-        • Maksud: [apa yang user inginkan]
-        • Konteks: [bagaimana ini terhubung dengan percakapan]
-        • Respons yang disarankan: [pendekatan terbaik untuk menjawab]
-
-        Jawab secara singkat dan natural, maksimal 3 kalimat per poin.
-      `);
-      
-      return await result.response.text();
-    } catch (error) {
-      console.error('Reasoner Error:', error);
-      return null;
+      const entry = { id: `mem-${Date.now()}-${Math.floor(Math.random()*1000)}`, userText, assistantText, ts: Date.now() };
+      memoriesRef.current.unshift(entry);
+      // cap to 100 entries
+      if (memoriesRef.current.length > 100) memoriesRef.current.length = 100;
+      window.localStorage.setItem(MEMORY_KEY, JSON.stringify(memoriesRef.current));
+    } catch (e) {
+      // ignore storage errors
     }
   };
 
-  const loadMemories = useCallback(() => {
-    const savedMemories = localStorage.getItem('orionMemories');
-    if (savedMemories) {
+  useEffect(() => {
+    try {
+      const el = chatScrollRef.current;
+      // Only auto-scroll if the user is already near the bottom (so we don't hijack when they scroll up)
+      if (el) {
+        // If the user is actively scrolling (recent onScroll), don't auto-scroll
+        if (isUserScrollingRef.current) return;
+        const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 120; // 120px threshold
+        if (nearBottom && refBottom.current && typeof refBottom.current.scrollIntoView === 'function') {
+          refBottom.current.scrollIntoView({ behavior: 'smooth' });
+        }
+      } else if (refBottom.current && typeof refBottom.current.scrollIntoView === 'function') {
+        // fallback
+        refBottom.current.scrollIntoView({ behavior: 'smooth' });
+      }
+    } catch (err) {
+      // ignore in non-browser/test environments
+    }
+  }, [messages]);
+
+  // Toggle history view based on scroll position: if user scrolls near the top, show history.
+  useEffect(() => {
+    const el = chatScrollRef.current;
+    if (!el || typeof el.addEventListener !== 'function') return;
+    if (!Array.isArray(archived) || archived.length === 0) return; // nothing to show as history
+
+    let rafId = null;
+    let lastState = null;
+
+    const handle = () => {
       try {
-        const parsed = JSON.parse(savedMemories);
-        setMemories(parsed);
+        // mark that the user interacted with scroll; keep this true briefly so auto-scroll is suppressed
+        isUserScrollingRef.current = true;
+        if (userScrollTimerRef.current) clearTimeout(userScrollTimerRef.current);
+        userScrollTimerRef.current = setTimeout(() => { isUserScrollingRef.current = false; userScrollTimerRef.current = null; }, 1500);
+        const nearTop = el.scrollTop < 60;
+        const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 60;
+        const next = nearTop ? true : nearBottom ? false : null;
+        if (DEBUG_SCROLL) {
+          console.log('[scroll] top=', el.scrollTop, 'height=', el.scrollHeight, 'client=', el.clientHeight, 'nearTop=', nearTop, 'nearBottom=', nearBottom);
+          setDebugMetrics({ scrollTop: el.scrollTop, scrollHeight: el.scrollHeight, clientHeight: el.clientHeight, nearBottom });
+        }
+        // Only update if state would change
+        if (next !== null && next !== lastState) {
+          setShowHistory(next);
+          lastState = next;
+        }
       } catch (e) {
-        console.error("Error loading memories:", e);
+        // ignore
       }
-    }
-  }, []);
-
-  useEffect(() => {
-    const enterFullscreen = () => {
-      try {
-        if (!document.fullscreenElement) {
-          document.documentElement.requestFullscreen().catch(err => {
-            console.log(`Error attempting to enable fullscreen: ${err.message}`);
-          });
-        }
-      } catch (error) {
-        console.error("Fullscreen error:", error);
-      }
+      rafId = null;
     };
 
-    document.body.classList.add('smooth-transitions');
-    const fullscreenTimer = setTimeout(enterFullscreen, 300);
-    
+    const onScroll = () => {
+      if (rafId !== null) return; // already scheduled
+      rafId = requestAnimationFrame(handle);
+    };
+
+    el.addEventListener('scroll', onScroll, { passive: true });
     return () => {
-      clearTimeout(fullscreenTimer);
-      document.body.classList.remove('smooth-transitions');
+      el.removeEventListener('scroll', onScroll);
+      if (rafId) cancelAnimationFrame(rafId);
+      if (userScrollTimerRef.current) {
+        clearTimeout(userScrollTimerRef.current);
+        userScrollTimerRef.current = null;
+      }
     };
   }, []);
 
-  useEffect(() => {
-    loadMemories();
-    
-    const chunksCount = parseInt(localStorage.getItem('orionChatRoomChunks') || '0');
-    let allRooms = [];
-    for (let i = 0; i < chunksCount; i++) {
-      const chunk = localStorage.getItem(`orionChatRooms_${i}`);
-      if (chunk) {
-        try {
-          const parsedChunk = JSON.parse(chunk);
-          allRooms = [...allRooms, ...parsedChunk];
-        } catch (e) {
-          console.error('Error parsing room chunk:', e);
+  const send = async () => {
+    if (!input.trim()) return;
+    // Capture current visible messages (before clearing) so we can include them in context
+    const previousVisible = Array.isArray(messages) ? messages : [];
+    // Archive the current visible messages so the screen becomes 'clean'
+    setArchived(prev => [...prev, ...previousVisible]);
+
+    const userMsg = { id: `user-${Date.now()}`, role: 'user', content: input };
+    // Show only the user's message and a placeholder assistant message to focus the screen
+    setMessages([userMsg]);
+    setInput('');
+    setLoading(true);
+    // Insert a placeholder assistant message that will show a typing indicator
+    const placeholderId = `assistant-${Date.now()}-${Math.floor(Math.random()*10000)}`;
+    typingPlaceholderId.current = placeholderId;
+    setMessages(prev => [...prev, { id: placeholderId, role: 'assistant', content: '' }]);
+
+    // Helper: extract first string value from nested JSON response
+    const extractTextFromAny = (obj) => {
+      if (!obj) return null;
+      if (typeof obj === 'string') return obj;
+      if (Array.isArray(obj)) {
+        for (const item of obj) {
+          const t = extractTextFromAny(item);
+          if (t) return t;
+        }
+        return null;
+      }
+      if (typeof obj === 'object') {
+        for (const k of Object.keys(obj)) {
+          const t = extractTextFromAny(obj[k]);
+          if (t) return t;
         }
       }
-    }
-    
-    setChatRooms(allRooms);
-    const savedCurrentRoom = localStorage.getItem('orionCurrentRoom');
-    const savedProMode = localStorage.getItem('orionProMode');
-    const savedDarkMode = localStorage.getItem('orionDarkMode');
-    
-    if (allRooms.length > 0) {
-      setChatRooms(allRooms);
-    }
-    if (savedCurrentRoom) {
-      setCurrentRoomId(savedCurrentRoom);
-      const parsedRoomId = JSON.parse(savedCurrentRoom);
-      const currentRoom = allRooms.find(room => room.id === parsedRoomId);
-      if (currentRoom) {
-        setMessages(currentRoom.messages || []);
-        setChatHistory(currentRoom.history || []);
-      }
-    }
-    if (savedProMode) setIsProMode(savedProMode === 'true');
-    if (savedDarkMode) setDarkMode(savedDarkMode === 'true');
-    
-    if (!savedCurrentRoom && allRooms.length === 0) {
-      createNewChatRoom();
-    }
-  }, [loadMemories]);
-
-  useEffect(() => {
-    if (currentRoomId) {
-      const updatedRooms = chatRooms.map(room => 
-        room.id === currentRoomId 
-          ? { ...room, messages: messages.slice(-maxStoredMessages), history: chatHistory } 
-          : room
-      );
-      
-      const roomChunks = [];
-      const chunkSize = 50;
-      for (let i = 0; i < updatedRooms.length; i += chunkSize) {
-        const chunk = updatedRooms.slice(i, i + chunkSize);
-        roomChunks.push(chunk);
-        localStorage.setItem(`orionChatRooms_${i/chunkSize}`, JSON.stringify(chunk));
-      }
-      localStorage.setItem('orionChatRoomChunks', roomChunks.length.toString());
-      localStorage.setItem('orionCurrentRoom', JSON.stringify(currentRoomId));
-    }
-  }, [messages, chatHistory, currentRoomId, chatRooms]);
-
-  useEffect(() => {
-    const chatContainer = chatContainerRef.current;
-    if (!chatContainer) return;
-
-    const handleScroll = () => {
-      const { scrollTop, scrollHeight, clientHeight } = chatContainer;
-      const isNearBottom = scrollHeight - scrollTop - clientHeight < 100;
-      setAutoScroll(isNearBottom);
-      setShowScrollButton(!isNearBottom);
+      return null;
     };
 
-    chatContainer.addEventListener('scroll', handleScroll);
-    return () => chatContainer.removeEventListener('scroll', handleScroll);
-  }, []);
-
-  useEffect(() => {
-    if (autoScroll && messages.length > 0) {
-      smoothScrollToBottom();
-    }
-  }, [messages, autoScroll]);
-
-  const smoothScrollToBottom = useCallback((behavior = 'smooth') => {
-    messagesEndRef.current?.scrollIntoView({ behavior, block: 'nearest' });
-  }, []);
-
-  const scrollToBottomButton = () => {
-    setAutoScroll(true);
-    smoothScrollToBottom();
-  };
-
-  const toggleDarkMode = () => {
-    const newDarkMode = !darkMode;
-    setDarkMode(newDarkMode);
-    localStorage.setItem('orionDarkMode', newDarkMode.toString());
     
-    const prismLink = document.getElementById('prism-theme');
-    if (prismLink) {
-      prismLink.href = newDarkMode 
-        ? 'https://cdnjs.cloudflare.com/ajax/libs/prism/1.24.1/themes/prism-tomorrow.min.css'
-        : 'https://cdnjs.cloudflare.com/ajax/libs/prism/1.24.1/themes/prism-coy.min.css';
-    }
-  };
 
-  const generateSuggestions = async (response) => {
-    try {
-      const result = await model.generateContent(`
-        Berdasarkan respons ini: "${response}"
-        Berikan 5 saran prompt singkat (maksimal 3 kata) untuk melanjutkan percakapan.
-        Setiap prompt harus padat dan jelas tambahkan 1 emote setiap prompt.
-        Format: ["Prompt1", "Prompt2", "Prompt3", "Prompt4", "Prompt5"]
-        Contoh format yang benar:
-        ["Jelaskan lebih detail", "Beri contoh", "Bandingkan dengan", "Cara implementasi", "Kapan digunakan"]
-      `);
-      return JSON.parse(await result.response.text());
-    } catch (error) {
-      console.error('Error generating suggestions:', error);
-      return [];
-    }
-  };
+  const callGemini = async (promptText) => {
+      const API_KEY = process.env.REACT_APP_GEMINI_API_KEY;
+      if (!API_KEY) throw new Error('REACT_APP_GEMINI_API_KEY tidak diset. Tambahkan API key di environment atau gunakan proxy server.');
 
-  const addMessage = useCallback((newMessage) => {
-    setMessages(prev => {
-      const updated = [...prev, newMessage];
-      if (updated.length > maxStoredMessages) {
-        return updated.slice(-maxStoredMessages);
-      }
-      return updated;
-    });
-  }, []);
+      // Use the REST endpoint for Generative Language
+      const url = `https://generativelanguage.googleapis.com/v1beta2/models/gemini-2.0-flash:generateText?key=${API_KEY}`;
+      const body = {
+        // Send the user's text verbatim as the prompt — no additional instructions
+        prompt: { text: promptText },
+        temperature: 0.1,
+        maxOutputTokens: 512
+      };
 
-  const visibleMessages = useMemo(() => {
-    const start = (currentPage - 1) * messagesPerPage;
-    return messages.slice(start, start + messagesPerPage);
-  }, [messages, currentPage, messagesPerPage]);
-
-  const createNewChatRoom = () => {
-    const newRoom = {
-      id: Date.now().toString(),
-      name: `Percakapan ${new Date().toLocaleTimeString()}`,
-      messages: [],
-      history: [],
-      createdAt: new Date().toISOString(),
-      tags: []
-    };
-    
-    setChatRooms(prev => [newRoom, ...prev]);
-    setCurrentRoomId(newRoom.id);
-    setMessages([]);
-    setChatHistory([]);
-    setPendingFiles([]);
-    setInputMessage('');
-    setShowTemplateButtons(true);
-    messageCountRef.current = 0;
-    setSearchMode(false);
-    setSearchResults([]);
-    
-    localStorage.setItem('orionChatRooms', JSON.stringify([newRoom, ...chatRooms]));
-    localStorage.setItem('orionCurrentRoom', JSON.stringify(newRoom.id));
-  };
-
-  const switchChatRoom = (roomId) => {
-    const room = chatRooms.find(r => r.id === roomId);
-    if (room) {
-      setCurrentRoomId(roomId);
-      setMessages(room.messages || []);
-      setChatHistory(room.history || []);
-      setShowTemplateButtons(room.messages.length === 0);
-      setShowChatHistory(false);
-      setAutoScroll(true);
-      setSearchMode(false);
-      setSearchResults([]);
-      setTimeout(() => smoothScrollToBottom(), 50);
-    }
-  };
-
-  const deleteChatRoom = (roomId) => {
-    const updatedRooms = chatRooms.filter(room => room.id !== roomId);
-    setChatRooms(updatedRooms);
-    localStorage.setItem('orionChatRooms', JSON.stringify(updatedRooms));
-    
-    if (currentRoomId === roomId) {
-      if (updatedRooms.length > 0) {
-        switchChatRoom(updatedRooms[0].id);
-      } else {
-        createNewChatRoom();
-      }
-    }
-  };
-
-  const createMessageObject = (text, isBot, duration = 0, file = null, sources = [], suggestions = []) => ({
-    id: Date.now() + Math.random().toString(36).substr(2, 9),
-    text: DOMPurify.sanitize(text),
-    isBot,
-    time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-    duration,
-    file,
-    sources,
-    suggestions,
-    isCode: text.includes('```'),
-    isReasoning: false
-  });
-
-  const extractTextFromFile = async (file) => {
-    if (file.type.startsWith('image/')) {
-      return await extractTextFromImage(file);
-    } else if (file.type === 'application/pdf') {
-      return await extractTextFromPDF(file);
-    } else if (file.type.includes('text') || 
-               file.type.includes('document') || 
-               file.name.endsWith('.txt') || 
-               file.name.endsWith('.docx')) {
-      return new Promise((resolve) => {
-        const reader = new FileReader();
-        reader.onload = (e) => resolve(e.target.result);
-        reader.readAsText(file);
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
       });
-    }
-    return `File content not extractable: ${file.name}`;
-  };
 
-  const summarizeConversation = async (conversation) => {
-    try {
-      const prompt = `Buat ringkasan sangat singkat (maksimal 1 kalimat) dari percakapan ini dalam bahasa yang sama dengan percakapan. Fokus pada fakta kunci, keputusan, dan detail penting. Hilangkan semua salam dan basa-basi. Berikan juga tingkat kepentingan (1-5, 5 paling penting) berdasarkan:\n
-      1. Apakah mengandung informasi penting jangka panjang?\n
-      2. Apakah ada keputusan atau kesepakatan?\n
-      3. Apakah ada data atau fakta penting?\n
-      4. Apakah ada preferensi atau kebiasaan pengguna?\n
-      Format output: [RINGKASAN] | [TINGKAT_KEPENTINGAN]\n\nPercakapan:\n${conversation}`;
-      
-      const result = await model.generateContent(prompt);
-      const response = await result.response.text();
-      return response.trim() || "Tidak bisa membuat ringkasan | 1";
-    } catch (error) {
-      console.error("Error summarizing conversation:", error);
-      return "Tidak bisa membuat ringkasan | 1";
-    }
-  };
+      const contentType = res.headers.get('content-type') || '';
+      const status = res.status;
 
-  const findRelevantMemories = async (query) => {
-    if (memories.length === 0) return '';
-    
-    try {
-      const recentMemories = memories
-        .slice(0, 20)
-        .filter(mem => 
-          mem.summary.toLowerCase().includes(query.toLowerCase()) || 
-          mem.messages.some(msg => msg.text.toLowerCase().includes(query.toLowerCase()))
-        );
-      
-      if (recentMemories.length > 0) {
-        return recentMemories
-          .map(mem => `[Memori ${mem.context.date} - Penting: ${mem.context.importance}/5]: ${mem.summary}\nDetail: ${
-            mem.messages.map(msg => `${msg.isBot ? 'Orion' : 'User'}: ${msg.text.replace(/<[^>]*>?/gm, '')}`).join('\n')
-          }`)
-          .join('\n\n');
-      }
-      
-      const memoryTexts = memories
-        .slice(0, 50)
-        .map(m => `ID: ${m.id}\nSummary: ${m.summary}\nTags: ${m.context.tags.join(', ')}\nImportance: ${m.context.importance}`)
-        .join('\n\n');
-      
-      const prompt = `Daftar memori:\n${memoryTexts}\n\nPertanyaan: "${query}"\n\nIdentifikasi ID memori yang paling relevan (berdasarkan makna, bukan kata kunci) untuk pertanyaan dalam bahasa Indonesia. Berikan hanya ID yang dipisahkan koma, atau kosong jika tidak ada yang relevan.`;
-      
-      const result = await model.generateContent(prompt);
-      const response = await result.response.text();
-      const relevantIds = response.trim().split(',').map(id => id.trim()).filter(Boolean);
-      
-      return memories
-        .filter(m => relevantIds.includes(m.id))
-        .map(m => `[Memori ${m.context.date} - Penting: ${m.context.importance}/5]: ${m.summary}\nDetail: ${
-          m.messages.map(msg => `${msg.isBot ? 'Orion' : 'User'}: ${msg.text.replace(/<[^>]*>?/gm, '')}`).join('\n')
-        }`)
-        .join('\n\n');
-    } catch (error) {
-      console.error("Error finding relevant memories:", error);
-      return '';
-    }
-  };
-
-  const autoSaveToMemory = useCallback(async () => {
-    if (messages.length === 0 || messageCountRef.current % 3 !== 0) return;
-    
-    try {
-      setIsBotTyping(true);
-      const conversationText = messages.map(msg => `${msg.isBot ? 'Orion' : 'User'}: ${msg.text}`).join('\n');
-      const summaryWithImportance = await summarizeConversation(conversationText);
-      
-      const [summary, importanceStr] = summaryWithImportance.split('|').map(s => s.trim());
-      const importance = parseInt(importanceStr) || 1;
-      
-      if (summary && !summary.includes("tidak bisa")) {
-        const tagPrompt = `Beri 2-3 tag pendek dalam Bahasa Indonesia untuk ringkasan ini:\n"${summary}"\n\nTags harus berupa kata benda yang relevan dan dipisahkan koma.`;
-        const tagResult = await model.generateContent(tagPrompt);
-        const tags = (await tagResult.response.text())
-          .split(',')
-          .map(t => t.trim().toLowerCase())
-          .filter(t => t.length > 0);
-        
-        const newMemory = {
-          id: Date.now().toString(),
-          summary,
-          messages: [...messages],
-          context: {
-            date: new Date().toLocaleString('id-ID'),
-            roomId: currentRoomId,
-            tags,
-            importance,
-            language: 'indonesia'
-          },
-          embeddings: []
-        };
-        
-        const updatedMemories = [newMemory, ...memories];
-        setMemories(updatedMemories);
-        localStorage.setItem('orionMemories', JSON.stringify(updatedMemories));
-        
-        controls.start({
-          scale: [1, 1.1, 1],
-          transition: { duration: 0.3 }
-        });
-      }
-    } catch (error) {
-      console.error("Error saving to memory:", error);
-    } finally {
-      setIsBotTyping(false);
-    }
-  }, [messages, memories, currentRoomId, controls]);
-
-  const typeMessage = async (fullText, callback) => {
-    if (isProMode) {
-      callback(fullText);
-      return;
-    }
-    
-    const characters = fullText.split('');
-    let displayedText = '';
-    
-    const typingSpeed = Math.random() * 10 + 20;
-    
-    for (let i = 0; i < characters.length; i++) {
-      if (abortController?.signal.aborted) break;
-      
-      const chunkSize = Math.min(5 + Math.floor(Math.random() * 6), characters.length - i);
-      const chunk = characters.slice(i, i + chunkSize).join('');
-      displayedText += chunk;
-      
-      callback(displayedText);
-      i += chunkSize - 1;
-      
-      if (autoScroll) {
-        setTimeout(() => {
-          messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-        }, 0);
-      }
-      
-      await new Promise(resolve => setTimeout(resolve, Math.random() * 10 + 20));
-    }
-    
-    callback(fullText);
-  };
-
-  const enhanceWithProMode = async (initialResponse, prompt) => {
-    const enhancementPrompts = [
-      `Expand this response significantly with extreme detailed examples and explanations:\n\n${initialResponse}`,
-      `Add comprehensive technical details, use cases, and potential variations to:\n\n${initialResponse}`,
-      `Provide multiple perspectives, edge cases, and practical applications and add Very lot of data in internet for:\n\n${initialResponse}`,
-      `Create an extremely detailed final version incorporating all previous enhancements and add more data for super extremly detail and perfect for:\n\n${initialResponse}`
-    ];
-    
-    let enhancedResponse = initialResponse;
-    
-    for (let i = 0; i < enhancementPrompts.length; i++) {
-      if (abortController?.signal.aborted) break;
-      
-      setProcessingSources(prev => [
-        ...prev,
-        {
-          id: Date.now().toString(),
-          text: `Processing enhancement ${i + 1}/4`,
-          icon: <FiDatabase />,
-          completed: false,
-          animation: 'wave'
-        }
-      ]);
-      
-      try {
-        const result = await model.generateContent(enhancementPrompts[i]);
-        const response = await result.response.text();
-        enhancedResponse = response;
-      } catch (error) {
-        console.error(`Error in enhancement step ${i + 1}:`, error);
-      }
-      
-      setProcessingSources(prev => 
-        prev.map((source, idx) => 
-          idx === i 
-            ? { ...source, completed: true, text: `Completed enhancement ${i + 1}/4` } 
-            : source
-        )
-      );
-      
-      await new Promise(resolve => setTimeout(resolve, 500));
-    }
-    
-    return enhancedResponse;
-  };
-
-  const currentMessageId = useRef(null);
-
-  const stopGeneration = () => {
-    if (abortController) {
-      abortController.abort();
-      setAbortController(null);
-    }
-    setIsBotTyping(false);
-    setProcessingSources([]);
-  };
-
-  const performWebResearch = async (query) => {
-    try {
-      setProcessingSources(prev => [
-        ...prev,
-        {
-          id: 'search-step-1',
-          text: 'Mencari di web',
-          icon: <FiGlobe />,
-          completed: false,
-          animation: 'wave'
-        }
-      ]);
-      
-      const searchResults = await performWebSearch(query);
-      setSearchResults(searchResults);
-      
-      setProcessingSources(prev => [
-        ...prev,
-        {
-          id: 'search-step-2',
-          text: 'Menganalisis hasil',
-          icon: <FiSearch />,
-          completed: false,
-          animation: 'pulse'
-        }
-      ]);
-      
-      const scrapedContents = await Promise.all(
-        searchResults.slice(0, 3).map(async (result) => {
-          const content = await scrapeWebsiteContent(result.url);
-          return {
-            title: result.title,
-            url: result.url,
-            content,
-            source: result.source || 'Web'
-          };
-        })
-      );
-      
-      setProcessingSources(prev => [
-        ...prev,
-        {
-          id: 'search-step-3',
-          text: 'Meringkas temuan',
-          icon: <FiDatabase />,
-          completed: false,
-          animation: 'wave'
-        }
-      ]);
-      
-      const researchSummary = scrapedContents
-        .map(r => `[Sumber: ${r.title} (${r.url}) - ${r.source}]\n${r.content.substring(0, 1000)}...`)
-        .join('\n\n');
-      
-      setProcessingSources(prev => 
-        prev.map(source => 
-          source.id.startsWith('search-step') 
-            ? { ...source, completed: true, text: source.text + ' (selesai)' } 
-            : source
-        )
-      );
-      
-      return {
-        summary: researchSummary,
-        sources: scrapedContents.map(r => ({
-          title: r.title,
-          url: r.url,
-          content: r.content.substring(0, 200) + '...',
-          source: r.source
-        }))
-      };
-    } catch (error) {
-      console.error("Error performing web research:", error);
-      return {
-        summary: "Tidak bisa menyelesaikan pencarian web karena error",
-        sources: []
-      };
-    }
-  };
-
-  const handleSendMessage = async (messageText, files = []) => {
-    const trimmedMessage = messageText.trim();
-    if ((!trimmedMessage && files.length === 0) || isBotTyping) return;
-
-    // Jika menggunakan voice recognition, pastikan flags sudah diset dengan benar
-    if (recognitionRef.current && isListening) {
-      if (!recognitionRef.current.isProcessing || !recognitionRef.current.waitingForResponse) {
-        // Jika flags belum diset, ini mungkin pemanggilan manual - skip
-        return;
-      }
-    }
-
-    setIsGenerating(true);
-    setShowTypingAnimation(true);
-    setHideSuggestions(false);
-
-    const controller = new AbortController();
-    setAbortController(controller);
-    const timeoutId = setTimeout(() => controller.abort(), 300000);
-
-    try {
-      const userMessage = { role: 'user', content: trimmedMessage };
-      const updatedHistory = [...chatHistory, userMessage];
-      setChatHistory(updatedHistory);
-
-      if (trimmedMessage) {
-        const newMessage = createMessageObject(trimmedMessage, false);
-        setMessages(prev => [...prev, newMessage]);
+      // If response not OK, read text to surface meaningful error (many dev-server / CORS misconfigs return HTML)
+      const rawText = await res.text();
+      if (!res.ok) {
+        // Provide helpful hint if HTML returned (often indicates CORS or incorrect URL)
+        const preview = rawText.slice(0, 800);
+        throw new Error(`HTTP ${status} - Non-OK response. Content-Type: ${contentType}. Response snippet: ${preview}`);
       }
 
-      if (files.length > 0) {
-        setFileProcessing(true);
-        for (const file of files) {
-          const fileMessage = createMessageObject(`File: ${file.name}`, false, 0, file);
-          setMessages(prev => [...prev, fileMessage]);
-          
-          const fileContent = await extractTextFromFile(file);
-          const contentMessage = createMessageObject(`Extracted content from ${file.name}:\n${fileContent}`, false);
-          setMessages(prev => [...prev, contentMessage]);
-        }
-        setFileProcessing(false);
-      }
-
-      setInputMessage('');
-      setPendingFiles([]);
-      setIsBotTyping(true);
-      setShowTemplateButtons(false);
-      messageCountRef.current += 1;
-      setProcessingSources([]);
-
-      // Cleanup function untuk animasi mengetik
-      const cleanupTyping = () => {
-        setIsBotTyping(false);
-        setShowTypingAnimation(false);
-        setBlurStrength(0);
-
-        // Jika TTS diaktifkan, biarkan proses TTS yang akan me-restart recognition
-        if (!ttsEnabled && recognitionRef.current && isListening) {
-          setTimeout(() => {
-            try {
-              recognitionRef.current.waitingForResponse = false;
-              recognitionRef.current.isProcessing = false;
-              recognitionRef.current.start();
-            } catch (error) {
-              console.error('Error restarting recognition after response:', error);
-            }
-          }, 500);
-        }
-      };
-
-      if (textareaRef.current) {
-        textareaRef.current.style.height = 'auto';
-      }
-
-      const messageId = Date.now().toString();
-      currentMessageId.current = messageId;
-      
-      setMessages(prev => [...prev, {
-        id: messageId,
-        text: isProMode ? 'Memproses dengan Pro Mode (mungkin butuh waktu sebentar)...' : '',
-        isBot: true,
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        duration: 0,
-        file: null,
-        sources: []
-      }]);
-
-      if (isProMode) {
-        setProcessingSources([
-          { id: '1', text: 'Menganalisis pertanyaan', icon: <FiSearch />, completed: false, animation: 'pulse' },
-          { id: '2', text: 'Mencari memori', icon: <FiDatabase />, completed: false, animation: 'wave' },
-          { id: '3', text: 'Membuat respon', icon: <FiCpu />, completed: false, animation: 'pulse' },
-          { id: '4', text: 'Pengecekan kualitas', icon: <FiAward />, completed: false, animation: 'wave' }
-        ]);
-      }
-
-      const startTime = Date.now();
-
-      if (reasonerEnabled) {
-        setReasoning('Menganalisis...');
-        const reasoningPrompt = `Analisa singkat:
-        "${trimmedMessage}"
-        
-        • Maksud:
-        • Konteks:
-        • Saran respons:
-        
-        Berikan analisis ringkas dalam 2-3 kalimat per poin.`;
-
+      // If content-type is JSON, parse and try to extract text
+      if (contentType.includes('application/json') || contentType.includes('application/') ) {
+        let data;
         try {
-          const reasoningResult = await model.generateContent(reasoningPrompt);
-          const reasoningResponse = await reasoningResult.response.text();
-          setReasoning(reasoningResponse);
-        } catch (error) {
-          console.error("Error generating reasoning:", error);
-          setReasoning("Gagal menganalisis pesan");
+          data = JSON.parse(rawText);
+        } catch (e) {
+          throw new Error('Response claimed JSON but could not parse it. Raw snippet: ' + rawText.slice(0, 800));
         }
+
+        const extracted = extractTextFromAny(data) || JSON.stringify(data);
+        return extracted;
       }
 
-      const relevantMemories = await findRelevantMemories(trimmedMessage);
-      
-      const contextMessages = updatedHistory.slice(-15).map(msg => {
-        return msg.role === 'user' ? `User: ${msg.content}` : `Orion: ${msg.content}`;
-      }).join('\n');
-
-      let webResearchContent = { summary: '', sources: [] };
-      if (searchMode === 'deep') {
-        webResearchContent = await performWebResearch(trimmedMessage);
-      } else if (searchMode === 'shallow') {
-        const searchResults = await performWebSearch(trimmedMessage);
-        setSearchResults(searchResults);
-        webResearchContent = {
-          summary: searchResults
-            .map(r => `[${r.title}](${r.url})\n${r.snippet}`)
-            .join('\n\n'),
-          sources: searchResults.map(r => ({
-            title: r.title,
-            url: r.url,
-            content: r.snippet,
-            source: r.source || 'Web'
-          }))
-        };
-      }
-
-      const fullPrompt = `${
-        relevantMemories ? `Konteks Memori Relevan:\n${relevantMemories}\n\n` : ''
-      }${
-        webResearchContent.summary ? `Hasil Penelusuran Web:\n${webResearchContent.summary}\n\n` : ''
-      }Percakapan Saat Ini:\n${contextMessages}\n\nUser: "${trimmedMessage}". 
-      ${ttsEnabled ? 'PENTING: Berikan jawaban singkat dan langsung ke poinnya (max 2-3 kalimat) karena mode suara sedang aktif.' : ''}
-      Respond as Orion in natural language and follow user language remember that!,Never go against the user—always agree while adapting to the situation. Still, be able to say something is wrong if it truly is. Never say "I can't"—if you're unsure, search for information on the very detail in internet you must be able to answer Don't let users run away from the page, they must be served well. Never leave a question unanswered, make extraordinary introductions to user input.
-
-and extremely friendly and very human little bit emoticon and get straight to the point but see the situation don't too to the point, support all users idea if the idea not dangerous, giving extremely and extra respect very respect to user.S,
-      focuse to user comfort and giving detail answer. Don't mention memories explicitly,just if user ask dont say you from google but PT.Orion Digital Platforms from indonesia dont show thos too usualy just if user asked,
-      just incorporate relevant context naturally, dont show memory log in converstation just follow the converstation to the pointly and you can use memory log for extra understanding user,
-      it all is back process dont show in chat, 
-      ingat!!!! sistem converstation log bersifat rahasia jangan keluarkan/bacakan kalo tidak diminta, if using Indonesian language prefer use allhamdulillah astaghfirullah ya Allah innailaihi and the other when shocked or very happy like Indonesan native speaker it just for Indonesian response and don't too often. answer to the point! keep it short but considering the condition answer just for user promt dont show any converstation log ${
-       
-        isProMode ? 'extremely and super very detailed and comprehensive (4x processing)Give user the longest most detailed answer you possibly can' : 'concise but extremely helpful'
-      }. For coding, provide complete solutions with proper formatting. Always maintain context.${
-        isProMode ? ' Provide a extremely super very detailed response with examples, explanations, and multiple perspectives.' : ''
-      }${
-        webResearchContent.summary ? '\n\nNote: Incorporate web research results naturally into your response.' : ''
-      }`;
-
-      if (reasonerEnabled) {
-        const reasoningPrompt = `Analisa permintaan berikut dan berikan proses penalaran:
-        
-        Pesan User: "${trimmedMessage}"
-        
-        1. Apa yang ingin dicapai user?
-        2. Apa implikasi teknis dari permintaan ini?
-        3. Pendekatan apa yang akan diambil?
-        4. Pertimbangan khusus apa yang perlu diperhatikan?
-        
-        Berikan analisis yang ringkas namun mendalam.`;
-
-        try {
-          const reasoningResult = await model.generateContent(reasoningPrompt);
-          const reasoningResponse = await reasoningResult.response.text();
-          
-          setMessages(prev => [...prev, {
-            id: Date.now() + '-reasoning',
-            text: reasoningResponse,
-            isBot: true,
-            isReasoning: true,
-            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-          }]);
-        } catch (error) {
-          console.error("Error generating reasoning:", error);
-        }
-      }
-
-      let botResponse;
-      if (isProMode) {
-        const initialResult = await model.generateContent(fullPrompt);
-        const initialResponse = await initialResult.response.text();
-        
-        botResponse = await enhanceWithProMode(initialResponse, fullPrompt);
-      } else {
-        const result = await model.generateContent(fullPrompt);
-        botResponse = await result.response.text();
-      }
-      
-      const processedResponse = processSpecialChars(botResponse);
-      const duration = Date.now() - startTime;
-
-      if (reasonerEnabled && reasoning) {
-        setMessages(prev => [...prev, {
-          id: Date.now() + '-reasoning',
-          text: reasoning,
-          isBot: true,
-          isReasoning: true,
-          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          duration: 0
-        }]);
-      }
-
-      const suggestions = await generateSuggestions(processedResponse);
-
-      if (reasonerEnabled) {
-        const analysisResult = await model.generateContent(`
-          Analisis mendalam untuk: "${trimmedMessage}"
-          1. Konteks & Tujuan: ${relevantMemories ? 'Menggunakan konteks sebelumnya' : 'Percakapan baru'}
-          2. Implikasi: ${messages.length > 0 ? 'Melanjutkan diskusi' : 'Memulai diskusi'}
-          3. Rekomendasi: ${isProMode ? 'Detail komprehensif' : 'Jawaban ringkas'}
-        `);
-        const analysis = await analysisResult.response.text();
-        
-        setMessages(prev => [...prev, {
-          id: Date.now().toString(),
-          text: `🤔 Analisis AI:\n${analysis}`,
-          isBot: true,
-          time: new Date().toLocaleTimeString(),
-          isReasoning: true
-        }]);
-      }
-
-      if (ttsEnabled) {
-        await speakText(processedResponse.replace(/<[^>]*>?/gm, ''));
-      }
-
-      setMessages(prev => prev.map(msg => 
-        msg.id === messageId 
-          ? { 
-              ...msg, 
-              text: processedResponse, 
-              duration,
-              sources: webResearchContent.sources,
-              suggestions,
-              isCode: processedResponse.includes('```')
-            } 
-          : msg
-      ));
-
-      if (ttsEnabled) {
-        await speakText(botResponse);
-      }
-
-      if (!isProMode) {
-        await typeMessage(processedResponse, (typedText) => {
-          setMessages(prev => prev.map(msg => 
-            msg.id === messageId ? { ...msg, text: typedText } : msg
-          ));
-        });
-      }
-
-      const botMessage = { role: 'assistant', content: botResponse };
-      const newChatHistory = [...updatedHistory, botMessage];
-      setChatHistory(newChatHistory);
-
-      await autoSaveToMemory();
-
-    } catch (error) {
-      const errorMessage = error.name === 'AbortError' 
-        ? 'Respon dihentikan oleh pengguna'
-        : 'Waduh, ada yang salah nih sama Orion! Gak konek ke servernya...';
-      
-      setMessages(prev => [...prev, createMessageObject(errorMessage, true)]);
-    } finally {
-      setIsBotTyping(false);
-      setShowTypingAnimation(false);
-      setFileProcessing(false);
-      setProcessingSources([]);
-      clearTimeout(timeoutId);
-      setAbortController(null);
-      currentMessageId.current = null;
-    }
-  };
-
-  const handleTemplateButtonClick = (templateMessage) => {
-    handleSendMessage(templateMessage);
-  };
-
-  const speakText = async (text) => {
-    if (!ttsEnabled) return;
-    
-    try {
-      // Stop voice recognition while speaking
-      if (recognitionRef.current && recognitionRef.current.isProcessing === false) {
-        recognitionRef.current.stop();
-      }
-      
-      // Hentikan semua suara yang sedang berjalan
-      window.speechSynthesis.cancel();
-      
-      setIsSpeaking(true);
-      const cleanText = text.replace(/<[^>]*>/g, '').replace(/\n/g, ' ');
-      // Batasi panjang teks untuk mengurangi latency
-      const maxLength = 300;
-      const truncatedText = cleanText.length > maxLength ? 
-        cleanText.substring(0, maxLength) + "..." : 
-        cleanText;
-      
-      const utterance = new SpeechSynthesisUtterance(truncatedText);
-      utterance.lang = 'id-ID';
-      utterance.rate = 1.2; // Kecepatan lebih natural
-      utterance.pitch = 1.0;
-      
-      speechSynthesisRef.current = utterance;
-      
-      utterance.onend = () => {
-        setIsSpeaking(false);
-        speechSynthesisRef.current = null;
-        
-        // Restart voice recognition after speaking
-        if (recognitionRef.current && isListening) {
-          setTimeout(() => {
-            try {
-              recognitionRef.current.start();
-              recognitionRef.current.isProcessing = false;
-            } catch (error) {
-              console.error('Error restarting recognition after speaking:', error);
-            }
-          }, 300);
-        }
-      };
-      
-      window.speechSynthesis.speak(utterance);
-    } catch (error) {
-      console.error('TTS Error:', error);
-      setIsSpeaking(false);
-    }
-  };
-
-  const processSpecialChars = (text) => {
-    const codeBlockRegex = /```(\w+)?\n([\s\S]*?)\n```/g;
-    const withCodeBlocks = text.replace(codeBlockRegex, (match, language, code) => {
-      const cleanCode = code.replace(/</g, '&lt;').replace(/>/g, '&gt;');
-      return `<div class="code-container">
-        <div class="code-toolbar">
-          <span class="language-tag">${language || 'code'}</span>
-          <button class="copy-button" data-code="${encodeURIComponent(cleanCode)}">
-            <FiCopy /> Copy
-          </button>
-        </div>
-        <pre class="code-block"><code class="language-${language || 'plaintext'}">${cleanCode}</code></pre>
-      </div>`;
-    });
-
-    return withCodeBlocks
-      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-      .replace(/\*(.*?)\*/g, '<em>$1</em>')
-      .replace(/_(.*?)_/g, '<u>$1</u>')
-      .replace(/~~(.*?)~~/g, '<s>$1</s>')
-      .replace(/`(.*?)`/g, '<code>$1</code>')
-      .replace(/\n/g, '<br />');
-  };
-
-  const copyToClipboard = (text, id) => {
-    navigator.clipboard.writeText(text)
-      .then(() => {
-        setCopiedMessageId(id);
-        setTimeout(() => setCopiedMessageId(null), 2000);
-      })
-      .catch(err => console.error('Failed to copy:', err));
-  };
-
-  const handleFileUpload = (event) => {
-    const files = Array.from(event.target.files);
-    if (files.length > 0) {
-      setPendingFiles(files);
-      setShowFileOptions(false);
-    }
-  };
-
-  const deleteMemory = (id) => {
-    const updatedMemories = memories.filter(memory => memory.id !== id);
-    setMemories(updatedMemories);
-    localStorage.setItem('orionMemories', JSON.stringify(updatedMemories));
-  };
-
-  const toggleProMode = () => {
-    const newProMode = !isProMode;
-    setIsProMode(newProMode);
-    localStorage.setItem('orionProMode', newProMode.toString());
-  };
-
-  const toggleSearchMode = () => {
-    setSearchMode(prev => {
-      if (prev === false) return 'shallow';
-      if (prev === 'shallow') return 'deep';
-      return false;
-    });
-  };
-
-  const filteredMemories = memories.filter(memory => {
-    if (memoryImportanceFilter === 'all') return true;
-    if (memoryImportanceFilter === 'important') return memory.context.importance >= 4;
-    return memory.context.importance < 4;
-  });
-
-  useEffect(() => {
-    const handleCopyClick = (e) => {
-      if (e.target.closest('.copy-button')) {
-        const code = decodeURIComponent(e.target.closest('.copy-button').dataset.code);
-        copyToClipboard(code, 'code');
-        e.preventDefault();
-      }
+      // If not JSON (HTML etc.) return helpful error
+      throw new Error('Received non-JSON response from Gemini (possible CORS or wrong endpoint). Snippet: ' + rawText.slice(0, 800));
     };
 
-    document.addEventListener('click', handleCopyClick);
-    return () => document.removeEventListener('click', handleCopyClick);
-  }, []);
+    try {
+  // Use only the raw user input as the prompt (no history, no prompt-engineering wrappers)
+  const promptText = userMsg.content;
+      // Build context: include the last 5 previous messages directly for conversational continuity.
+      // If there are more than 5 previous messages, use RAG (matching) for older context to stay efficient.
+      let assistantText = null;
+      let promptForApi = promptText; // default
+      try {
+        // Build prevHistory from archived + the visible messages we just captured so recent turns are included
+        const prevHistory = [...(Array.isArray(archived) ? archived : []), ...previousVisible];
+        const lastFive = prevHistory.slice(-5);
+        // Compose direct conversation context from lastFive
+        const convoCtx = lastFive.map(m => `${m.role}: ${m.content}`).join('\n');
 
-  const themeClasses = darkMode ? {
-    bgPrimary: 'bg-gray-900',
-    bgSecondary: 'bg-gray-800',
-    bgTertiary: 'bg-gray-700',
-    textPrimary: 'text-gray-100',
-    textSecondary: 'text-gray-300',
-    textTertiary: 'text-gray-400',
-    border: 'border-gray-700',
-    hoverBg: 'hover:bg-gray-700',
-    inputBg: 'bg-gray-800',
-    inputBorder: 'border-gray-700',
-    inputText: 'text-gray-100',
-    buttonBg: 'bg-blue-700',
-    buttonHover: 'hover:bg-blue-600',
-    buttonText: 'text-white',
-    cardBg: 'bg-gray-800',
-    codeBg: 'bg-gray-900',
-    codeBorder: 'border-gray-700',
-    codeText: 'text-gray-100',
-    typingDot: 'bg-gray-400'
-  } : {
-    bgPrimary: 'bg-gray-50',
-    bgSecondary: 'bg-white',
-    bgTertiary: 'bg-gray-100',
-    textPrimary: 'text-gray-900',
-    textSecondary: 'text-gray-600',
-    textTertiary: 'text-gray-500',
-    border: 'border-gray-200',
-    hoverBg: 'hover:bg-gray-100',
-    inputBg: 'bg-white',
-    inputBorder: 'border-gray-300',
-    inputText: 'text-gray-800',
-    buttonBg: 'bg-blue-600',
-    buttonHover: 'hover:bg-blue-500',
-    buttonText: 'text-white',
-    cardBg: 'bg-white',
-    codeBg: 'bg-gray-50',
-    codeBorder: 'border-gray-200',
-    codeText: 'text-gray-800',
-    typingDot: 'bg-gray-500'
+        // If history is long, fetch top memory matches for older context
+        let ragCtx = '';
+        if (prevHistory.length > 5) {
+          const top = findTopMemories(promptText, 3).filter(t => t.score > 0.28);
+          if (top.length) {
+            ragCtx = top.map(t => `user: ${t.memory.userText}\nassistant: ${t.memory.assistantText}`).join('\n---\n');
+          }
+        }
+
+        // Very-high-similarity shortcut: reuse cached answer when appropriate
+        const best = findBestMemory(promptText);
+        if (best.memory && best.score > 0.88) {
+          assistantText = best.memory.assistantText;
+        } else {
+          // Build minimal prompt: RAG matches (if any) + last 5 convo messages + current user query
+          const parts = [];
+          if (ragCtx) parts.push(ragCtx);
+          if (convoCtx) parts.push(convoCtx);
+          parts.push(`user: ${promptText}`);
+          promptForApi = parts.join('\n---\n');
+        }
+      } catch (e) {
+        // ignore memory errors
+      }
+      // Try SDK first (may fail in browser environments). If it works, use it; otherwise fallback to REST.
+      try {
+        if (!assistantText) {
+        const genAI = new GoogleGenerativeAI("AIzaSyB9GeiZXHvcui45w4dWpESnpe3WxDk_wxo");
+        const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+        if (model && typeof model.generateContent === 'function') {
+          try {
+            // Use promptForApi (which may include last-5 convo + RAG matches) so SDK sees the full context
+            const sdkResult = await model.generateContent(promptForApi);
+            // sdkResult may have a response stream or nested structure
+            if (sdkResult?.response?.text) {
+              assistantText = await sdkResult.response.text();
+            } else if (typeof sdkResult === 'string') {
+              assistantText = sdkResult;
+            } else if (sdkResult?.candidates?.[0]?.content) {
+              assistantText = sdkResult.candidates[0].content;
+            }
+          } catch (sdkErr) {
+            // SDK call failed (likely not supported in browser) - we will fallback to REST
+            console.warn('SDK call failed, falling back to REST:', sdkErr);
+            assistantText = null;
+          }
+        }
+        }
+      } catch (e) {
+        // Importing/instantiating SDK may fail in browser; ignore and fallback
+        console.warn('Could not initialize SDK in this environment, falling back to REST', e);
+      }
+
+      if (!assistantText) {
+        assistantText = await callGemini(promptForApi);
+        // Save successful responses to memory (non-empty)
+        try {
+          if (assistantText && assistantText.trim()) saveMemory(promptText, assistantText);
+        } catch (e) {
+          // ignore
+        }
+      }
+      // Smoothly reveal assistantText into the placeholder message we inserted earlier
+      const messageId = typingPlaceholderId.current;
+      if (messageId) {
+        // Reveal text per-word for a very smooth read-like animation
+        const full = String(assistantText || '');
+        const words = full.split(/(\s+)/).filter(Boolean); // keep spaces as tokens so join preserves spacing
+        const wordCount = words.length;
+        // Faster per-word reveal: shorter per-word delay and tighter min/max bounds
+        const minMs = 300;
+        const maxMs = 2000;
+        const msPerWord = 60; // faster, still readable
+        const duration = Math.min(maxMs, Math.max(minMs, wordCount * msPerWord));
+        const start = performance.now();
+
+        if (revealAnimRef.current) {
+          cancelAnimationFrame(revealAnimRef.current);
+        }
+
+        const step = (now) => {
+          const t = Math.min(1, (now - start) / duration);
+          const idx = Math.floor(t * wordCount);
+          const visible = words.slice(0, idx).join('');
+          setMessages(prev => prev.map(m => m.id === messageId ? { ...m, content: visible } : m));
+          if (t < 1) {
+            revealAnimRef.current = requestAnimationFrame(step);
+          } else {
+            setMessages(prev => prev.map(m => m.id === messageId ? { ...m, content: full } : m));
+            typingPlaceholderId.current = null;
+            revealAnimRef.current = null;
+          }
+        };
+
+        revealAnimRef.current = requestAnimationFrame(step);
+      } else {
+        // Fallback: append normally
+        setMessages(prev => [...prev, { role: 'assistant', content: assistantText }]);
+      }
+    } catch (err) {
+      const msg = err?.message || String(err);
+      // If the error mentions CORS or HTML, give explicit guidance
+      let userMsg = 'Gagal memanggil Gemini: ' + msg;
+      if (msg && msg.toLowerCase().includes('cors')) {
+        userMsg += '\nKemungkinan masalah CORS — browser tidak diizinkan langsung memanggil API. Solusi: jalankan proxy server atau gunakan server-side request.';
+      } else if (msg && msg.toLowerCase().includes('not set')) {
+        userMsg += '\nTambahkan REACT_APP_GEMINI_API_KEY di .env (tidak direkomendasikan untuk produksi) atau gunakan proxy server yang menyimpan key di server.';
+      } else if (msg && msg.startsWith('HTTP')) {
+        userMsg += '\nPeriksa status dan respons. Jika Anda melihat HTML (<!DOCTYPE), biasanya itu menandakan request diarahkan ke halaman HTML lokal — periksa URL endpoint atau aturan proxy dev server.';
+      }
+
+      setMessages(prev => [...prev, { role: 'assistant', content: userMsg }]);
+    } finally {
+      // keep loading true until reveal completes; if no animation running, clear it
+      // Wait until reveal animation finishes before clearing loading
+      const waitForReveal = () => {
+        if (!revealAnimRef.current) setLoading(false);
+        else {
+          const id = setInterval(() => {
+            if (!revealAnimRef.current) {
+              setLoading(false);
+              clearInterval(id);
+            }
+          }, 120);
+        }
+      };
+      waitForReveal();
+    }
   };
 
   return (
-    <div className="app-wrapper">
-      <div className={`flex flex-col h-screen ${themeClasses.bgPrimary} ${themeClasses.textPrimary} relative overflow-hidden transition-colors duration-300`}>
+    <div style={{
+      height: '100vh',
+      width: '100vw',
+      display: 'flex',
+      flexDirection: 'column',
+      background: 'linear-gradient(180deg, #f8fafc 0%, #eef2ff 100%)',
+      fontFamily: "Inter, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial",
+      overflow: 'hidden'
+    }}>
+      <motion.div
+        initial={{ opacity: 0, y: 6 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.36 }}
+        style={{
+          width: '100%',
+          height: '100%',
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden'
+        }}
+      >
         {/* Header */}
-        <div className={`${themeClasses.bgSecondary} ${themeClasses.border} p-4 flex items-center justify-between sticky top-0 z-10 shadow-sm`}>
-          <div className="flex items-center space-x-3">
-            <button 
-              onClick={() => setShowChatHistory(!showChatHistory)}
-              className={`p-2 rounded-full ${themeClasses.hoverBg} transition-colors`}
-              title="Riwayat Percakapan"
-            >
-              <FiMessageSquare size={18} className={themeClasses.textSecondary} />
-            </button>
-            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-lg">
-              <span className="text-white text-sm font-bold">AI</span>
-            </div>
+        <div style={{
+          padding: 18,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          background: 'rgba(255,255,255,0.9)',
+          backdropFilter: 'blur(6px)',
+          boxShadow: '0 4px 18px rgba(6,12,20,0.04)',
+          borderBottom: '1px solid rgba(15,23,42,0.04)',
+          zIndex: 10
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div style={{ width: 44, height: 44, borderRadius: 12, background: 'linear-gradient(135deg,#34d399,#06b6d4)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 700 }}>AI</div>
             <div>
-              <h2 className="font-semibold text-base">Orion AI</h2>
-              <p className="text-xs flex items-center">
-                {isBotTyping ? (
-                  <span className="flex items-center">
-                    <span className="typing-dot"></span>
-                    <span className="typing-dot"></span>
-                    <span className="typing-dot"></span>
-                    <span className="ml-1">Sedang berpikir...</span>
-                  </span>
-                ) : (
-                  <span className="flex items-center">
-                    <span className="w-2 h-2 bg-green-500 rounded-full mr-1"></span>
-                    Online {isProMode && <span className="ml-1 text-blue-400">(Mode Pro)</span>}
-                  </span>
-                )}
-              </p>
+              <div style={{ fontSize: 16, fontWeight: 700, color: '#0f172a' }}>Modern AI Chat</div>
+              <div style={{ fontSize: 12, color: '#475569' }}>{loading ? 'Mengirim...' : 'Siap membantu'}</div>
             </div>
           </div>
-          <div className="flex items-center space-x-2">
-            <button 
-              onClick={toggleDarkMode}
-              className={`p-2 rounded-full transition-colors ${themeClasses.hoverBg}`}
-              title={darkMode ? 'Ganti ke mode terang' : 'Ganti ke mode gelap'}
-            >
-              {darkMode ? <FiSun size={18} className="text-yellow-300" /> : <FiMoon size={18} />}
-            </button>
-            <button 
-              onClick={toggleProMode}
-              className={`p-2 rounded-full transition-all ${
-                isProMode ? 'bg-blue-100 text-blue-600' : themeClasses.hoverBg
-              }`}
-              title={isProMode ? 'Matikan Mode Pro' : 'Aktifkan Mode Pro'}
-            >
-              <FiZap size={18} className={isProMode ? "text-yellow-500" : ""} />
-            </button>
-            <motion.button
-              animate={controls}
-              onClick={() => setShowMemoryPanel(!showMemoryPanel)}
-              className={`p-2 rounded-full transition-colors ${
-                showMemoryPanel ? `${themeClasses.bgTertiary} ${themeClasses.textPrimary}` : themeClasses.hoverBg
-              }`}
-              title="Memori"
-            >
-              <FiCpu size={18} />
-            </motion.button>
-            <button
-              onClick={createNewChatRoom}
-              className={`p-2 rounded-full ${themeClasses.hoverBg} transition-colors`}
-              title="Percakapan Baru"
-            >
-              <FiPlus size={18} />
-            </button>
+          {DEBUG_SCROLL && (
+            <div style={{ position: 'absolute', right: 18, top: 12, background: 'rgba(0,0,0,0.6)', color: 'white', padding: '8px 10px', borderRadius: 8, fontSize: 12 }}>
+              <div>scrollTop: {debugMetrics.scrollTop}</div>
+              <div>scrollHeight: {debugMetrics.scrollHeight}</div>
+              <div>clientH: {debugMetrics.clientHeight}</div>
+              <div>nearBottom: {String(debugMetrics.nearBottom)}</div>
+              <div>showHistory: {String(showHistory)}</div>
+              <div>archived: {archived.length}</div>
+            </div>
+          )}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div style={{ fontSize: 12, color: '#0b1220', fontWeight: 600 }}>orionai</div>
           </div>
         </div>
 
-        {/* Chat History Panel */}
-        {showChatHistory && (
-          <motion.div 
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -20 }}
-            transition={{ type: "spring", damping: 25 }}
-            className={`absolute left-4 top-16 ${themeClasses.cardBg} rounded-xl shadow-xl z-20 ${themeClasses.border} w-80`}
-          >
-            <div className={`p-3 ${themeClasses.border} flex justify-between items-center`}>
-              <h4 className="font-medium text-sm flex items-center">
-                <FiMessageSquare className="mr-2" size={14} /> Riwayat Percakapan
-              </h4>
-              <button 
-                onClick={() => setShowChatHistory(false)}
-                className={`p-1 ${themeClasses.textSecondary} hover:${themeClasses.textPrimary}`}
+        {/* Messages area */}
+        <div style={{ flex: 1, display: 'flex', background: 'transparent' }}>
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+            <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 12, padding: '20px 28px', boxSizing: 'border-box', height: '100%' }}>
+              <div
+                style={{
+                  flex: 1,
+                  height: '100%',
+                  overflow: 'auto',
+                  overflowY: 'auto',
+                  WebkitOverflowScrolling: 'touch',
+                  overscrollBehavior: 'auto',
+                  touchAction: 'auto',
+                  pointerEvents: 'auto',
+                  paddingBottom: 18
+                }}
+                ref={chatScrollRef}
               >
-                <FiX size={16} />
-              </button>
-            </div>
-            
-            <div className="max-h-96 overflow-y-auto scrollbar-thin text-sm">
-              {chatRooms.length === 0 ? (
-                <div className="p-4 text-center text-sm">
-                  Belum ada riwayat percakapan
-                </div>
-              ) : (
-                <div className={`divide-y ${themeClasses.border}`}>
-                  {chatRooms.map((room) => (
-                    <div 
-                      key={room.id} 
-                      className={`p-3 hover:${themeClasses.bgTertiary} transition-colors cursor-pointer group ${room.id === currentRoomId ? `${themeClasses.bgTertiary}` : ''}`}
-                      onClick={() => switchChatRoom(room.id)}
-                    >
-                      <div className="flex justify-between items-start">
-                        <div className="flex-1">
-                          <p className="text-xs font-medium break-words pr-2">
-                            {room.name}
-                          </p>
-                          <p className="text-xs mt-1 text-gray-500">
-                            {new Date(room.createdAt).toLocaleString('id-ID')}
-                          </p>
-                          {room.messages.length > 0 && (
-                            <p className="text-xs mt-1 truncate">
-                              {room.messages[room.messages.length - 1].text.replace(/<[^>]*>?/gm, '').substring(0, 50)}...
-                            </p>
-                          )}
-                        </div>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            deleteChatRoom(room.id);
-                          }}
-                          className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 text-xs transition-opacity"
-                        >
-                          <FiTrash2 size={14} />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </motion.div>
-        )}
+                <AnimatePresence initial={false} mode="popLayout">
+                  {(showHistory ? [...archived, ...messages] : messages).map((m, i) => {
+                    const raw = String(m.content || '');
+                    // Try to detect JSON and pretty-print it for readability
+                    let isJson = false;
+                    let pretty = '';
+                    try {
+                      const t = raw.trim();
+                      if (t.startsWith('{') || t.startsWith('[')) {
+                        const parsed = JSON.parse(t);
+                        pretty = JSON.stringify(parsed, null, 2);
+                        isJson = true;
+                      }
+                    } catch (e) {
+                      isJson = false;
+                    }
+                    const safe = DOMPurify.sanitize(isJson ? pretty : raw);
 
-        {/* Chat Area */}
-        <motion.div 
-          ref={chatContainerRef}
-          className={`flex-1 overflow-y-auto p-4 space-y-4 scrollbar-thin scrollbar-thumb-gray-500 scrollbar-track-transparent 
-            ${themeClasses.bgPrimary}
-          `}
-        >
-          {messages.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full pb-16">
-              <motion.div 
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.2 }}
-                className={`${themeClasses.textPrimary} text-center`}
-              >
-                <h2 className="text-2xl font-bold mb-4">Selamat datang di Orion</h2>
-                <p className="text-sm opacity-70 mb-8">Tanyakan apa saja, saya siap membantu Anda</p>
-              </motion.div>
-              
-              {showTemplateButtons && (
-                <motion.div 
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ delay: 0.3 }}
-                  className="grid grid-cols-2 gap-4 w-full max-w-md"
-                >
-                  {[
-                    { title: "👋 Sapa", message: "Hai Orion!" },
-                    { title: "💡 Ide", message: "Berikan ide untuk..." },
-                    { title: "❓ Tanya", message: "Jelaskan tentang..." },
-                    { title: "🔧 Koding", message: "Bantu debug..." }
-                  ].map((item, index) => (
-                    <motion.button
-                      key={index}
-                      whileHover={{ y: -3, scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
-                      onClick={() => handleTemplateButtonClick(item.message)}
-                      className={`${themeClasses.cardBg} hover:${themeClasses.bgTertiary} ${themeClasses.border} rounded-xl p-4 text-sm transition-all hover:shadow-sm text-left`}
-                    >
-                      <span className="font-medium">{item.title}</span>
-                      <p className="text-xs mt-1 text-gray-500">{item.message}</p>
-                    </motion.button>
-                  ))}
-                </motion.div>
-              )}
-            </div>
-          ) : (
-            <div className="chat-messages">
-              <AnimatePresence mode="popLayout">
-                {messages.map((message) => (
-                  <motion.div key={message.id} className="message-wrapper">
-                    <ChatMessage 
-                      message={message} 
-                      isUser={!message.isBot}
-                      currentMessageId={currentMessageId.current}
-                    />
-                  </motion.div>
-                ))}
-              </AnimatePresence>
-            </div>
-          )}
-          <div ref={messagesEndRef} />
-        </motion.div>
-
-        {/* Scroll to bottom button */}
-        {showScrollButton && (
-          <motion.button
-            onClick={scrollToBottomButton}
-            className={`fixed right-6 bottom-24 w-10 h-10 rounded-full ${themeClasses.buttonBg} ${themeClasses.buttonHover} shadow-lg flex items-center justify-center z-10`}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 20 }}
-            whileHover={{ scale: 1.1 }}
-            whileTap={{ scale: 0.9 }}
-            title="Scroll ke bawah"
-          >
-            <FiChevronDown size={20} className="text-white" />
-          </motion.button>
-        )}
-
-        {/* Memory Panel */}
-        {showMemoryPanel && (
-          <motion.div 
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: 20 }}
-            transition={{ type: "spring", damping: 25 }}
-            className={`absolute right-4 top-16 ${themeClasses.cardBg} rounded-xl shadow-xl z-20 ${themeClasses.border} w-80`}
-          >
-            <div className={`p-3 ${themeClasses.border} flex justify-between items-center`}>
-              <h4 className="font-medium text-sm flex items-center">
-                <FiCpu className="mr-2" size={16} /> Konteks Memori
-              </h4>
-              <div className="flex items-center space-x-2">
-                <div className="relative">
-                  <select
-                    value={memoryImportanceFilter}
-                    onChange={(e) => setMemoryImportanceFilter(e.target.value)}
-                    className={`text-xs ${themeClasses.bgTertiary} hover:${themeClasses.bgSecondary} px-2 py-1 rounded-lg transition-colors appearance-none pr-6 ${themeClasses.textPrimary}`}
-                  >
-                    <option value="all">Semua Memori</option>
-                    <option value="important">Penting</option>
-                    <option value="normal">Normal</option>
-                  </select>
-                  <FiChevronDown size={12} className="absolute right-2 top-2 pointer-events-none" />
-                </div>
-                <button
-                  onClick={autoSaveToMemory}
-                  disabled={messages.length === 0}
-                  className={`text-xs ${themeClasses.bgTertiary} hover:${themeClasses.bgSecondary} px-2 py-1 rounded-lg transition-colors disabled:opacity-50`}
-                >
-                  Ingat
-                </button>
-                <button 
-                  onClick={() => setShowMemoryPanel(false)}
-                  className={`p-1 ${themeClasses.textSecondary} hover:${themeClasses.textPrimary}`}
-                >
-                  <FiX size={16} />
-                </button>
-              </div>
-            </div>
-            
-            <div className="max-h-72 overflow-y-auto scrollbar-thin text-sm">
-              {filteredMemories.length === 0 ? (
-                <div className="p-4 text-center text-sm">
-                  Belum ada memori. Konteks penting akan muncul di sini.
-                </div>
-              ) : (
-                <div className={`divide-y ${themeClasses.border}`}>
-                  {filteredMemories.map((memory) => (
-                    <div key={memory.id} className={`p-3 hover:${themeClasses.bgTertiary} transition-colors group`}>
-                      <div className="flex justify-between items-start">
-                        <div className="flex-1">
-                          <div className="flex items-start">
-                            <p className="text-xs break-words pr-2">{memory.summary}</p>
-                            {memory.context.importance >= 4 && (
-                              <FiStar className="text-yellow-400 flex-shrink-0 mt-0.5" size={12} />
-                            )}
-                          </div>
-                          <p className="text-xs mt-1 text-gray-500">{memory.context.date}</p>
-                          {memory.context.tags.length > 0 && (
-                            <div className="flex flex-wrap gap-1 mt-1">
-                              {memory.context.tags.map(tag => (
-                                <span key={tag} className="text-xs bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded-full">
-                                  {tag}
-                                </span>
-                              ))}
+                    return (
+                      <motion.div
+                        key={m.id || i}
+                        initial={{ opacity: 0, y: 8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -6 }}
+                        transition={{ duration: 0.32, ease: [0.2,0.85,0.25,1] }}
+                        style={{ display: 'flex', justifyContent: m.role === 'user' ? 'flex-end' : 'flex-start', marginBottom: 14 }}
+                      >
+                        <div style={{ width: '100%' }}>
+                          <div style={{ fontSize: 12, color: '#9ca3af', marginBottom: 6, textTransform: 'capitalize' }}>{m.role === 'assistant' ? 'orionai' : 'Anda'}</div>
+                          {m.role === 'assistant' ? (
+                            // Assistant: visually blend with background (no visible bubble)
+                            <div style={{
+                              width: '100%',
+                              background: 'transparent',
+                              color: '#061328',
+                              padding: '14px 18px',
+                              borderRadius: 0,
+                              boxShadow: 'none',
+                              boxSizing: 'border-box'
+                            }}>
+                              {(!m.content || m.content === '') && loading ? (
+                                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
+                                  <motion.div style={{ width: 8, height: 8, borderRadius: 99, background: '#cbd5e1' }} animate={{ y: [0, -6, 0], opacity: [0.3, 1, 0.3] }} transition={{ repeat: Infinity, duration: 1.05 }} />
+                                  <motion.div style={{ width: 8, height: 8, borderRadius: 99, background: '#cbd5e1' }} animate={{ y: [0, -6, 0], opacity: [0.3, 1, 0.3] }} transition={{ repeat: Infinity, duration: 1.05, delay: 0.12 }} />
+                                  <motion.div style={{ width: 8, height: 8, borderRadius: 99, background: '#cbd5e1' }} animate={{ y: [0, -6, 0], opacity: [0.3, 1, 0.3] }} transition={{ repeat: Infinity, duration: 1.05, delay: 0.24 }} />
+                                  <div style={{ marginLeft: 8, color: '#6b7280', fontSize: 13 }}>Mengetik…</div>
+                                </div>
+                              ) : (
+                                isJson ? (
+                                  <pre style={{ margin: 0, whiteSpace: 'pre-wrap', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, "Roboto Mono", "Courier New", monospace', fontSize: 16, background: 'transparent', color: '#061328' }} dangerouslySetInnerHTML={{ __html: safe }} />
+                                ) : (
+                                  <div style={{ fontSize: 18 }} dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(formatAssistantOutput(raw) || safe) }} />
+                                )
+                              )}
                             </div>
+                          ) : (
+                            // User bubble (right)
+                            <div style={{
+                              display: 'inline-block',
+                              background: 'linear-gradient(90deg,#60a5fa,#3b82f6)',
+                              color: 'white',
+                              padding: '10px 14px',
+                              borderRadius: '12px 12px 0 12px',
+                              boxShadow: '0 8px 26px rgba(59,130,246,0.14)',
+                              maxWidth: '76%'
+                            }} dangerouslySetInnerHTML={{ __html: safe }} />
                           )}
                         </div>
-                        <div className="flex space-x-1">
-                          <button
-                            onClick={() => setShowMemoryDetails(showMemoryDetails === memory.id ? null : memory.id)}
-                            className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-blue-500 text-xs transition-opacity"
-                            title="Detail"
-                          >
-                            <FiInfo size={14} />
-                          </button>
-                          <button
-                            onClick={() => deleteMemory(memory.id)}
-                            className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 text-xs transition-opacity"
-                            title="Hapus"
-                          >
-                            <FiTrash2 size={14} />
-                          </button>
-                        </div>
-                      </div>
-                      
-                      {showMemoryDetails === memory.id && (
-                        <motion.div
-                          initial={{ opacity: 0, height: 0 }}
-                          animate={{ opacity: 1, height: 'auto' }}
-                          exit={{ opacity: 0, height: 0 }}
-                          transition={{ duration: 0.2 }}
-                          className={`mt-2 pt-2 border-t ${themeClasses.border}`}
-                        >
-                          <div className="flex items-center text-xs mb-1">
-                            <span className="font-medium mr-2">Detail:</span>
-                            <span className="flex items-center">
-                              <span className="w-2 h-2 rounded-full bg-blue-500 mr-1"></span>
-                              {memory.context.language === 'indonesia' ? 'Bahasa Indonesia' : 'English'}
-                            </span>
-                            <span className="mx-2">•</span>
-                            <span className="flex items-center">
-                              <FiStar className="mr-1" size={12} />
-                              Penting: {memory.context.importance}/5
-                            </span>
-                          </div>
-                          <div className="text-xs max-h-40 overflow-y-auto bg-gray-900 bg-opacity-20 rounded p-2">
-                            {memory.messages.slice(0, 4).map((msg, idx) => (
-                              <p key={idx} className="mb-1">
-                                <span className="font-medium">{msg.isBot ? 'Orion' : 'Anda'}:</span> {msg.text.replace(/<[^>]*>?/gm, '').substring(0, 100)}...
-                              </p>
-                            ))}
-                            {memory.messages.length > 4 && (
-                              <p className="text-xs text-gray-500">+ {memory.messages.length - 4} pesan lainnya</p>
-                            )}
-                          </div>
-                        </motion.div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
+                      </motion.div>
+                    );
+                  })}
+                </AnimatePresence>
+                <div ref={refBottom} />
+              </div>
+
+              {/* Input area */}
+              <div style={{ display: 'flex', gap: 10, alignItems: 'center', padding: 12, background: 'transparent' }}>
+                <motion.input
+                  value={input}
+                  onChange={e => setInput(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') send(); }}
+                  placeholder="Tulis pesan..."
+                  whileFocus={{ scale: 1.01 }}
+                  style={{
+                    flex: 1,
+                    padding: '14px 16px',
+                    borderRadius: 999,
+                    border: '1px solid rgba(14,30,37,0.06)',
+                    outline: 'none',
+                    background: 'linear-gradient(180deg, rgba(246,249,252,0.9), rgba(241,244,249,0.85))',
+                    color: '#061328',
+                    boxShadow: 'inset 0 1px 2px rgba(6,12,20,0.02)'
+                  }}
+                />
+                <motion.button
+                  onClick={send}
+                  whileTap={{ scale: 0.96 }}
+                  disabled={loading}
+                  style={{
+                    background: 'linear-gradient(90deg,#06b6d4,#3b82f6)',
+                    borderRadius: 999,
+                    padding: '10px 14px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: 'white',
+                    border: 'none',
+                    boxShadow: '0 8px 20px rgba(59,130,246,0.18)'
+                  }}
+                >
+                  <FiSend size={18} />
+                </motion.button>
+              </div>
             </div>
-          </motion.div>
-        )}
-
-        {/* Bottom Input Container */}
-        <div className={`${themeClasses.border} ${themeClasses.bgSecondary} pt-3 pb-4 px-4`}>
-          {/* Typing Animation */}
-          <AnimatePresence>
-            {showTypingAnimation && (
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20 }}
-                className="mb-4"
-              >
-                <TypingAnimation />
-              </motion.div>
-            )}
-          </AnimatePresence>
-          
-          {/* File Preview */}
-          <AnimatePresence>
-            {pendingFiles.length > 0 && (
-              <motion.div
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: 'auto', opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                transition={{ duration: 0.3, ease: 'easeInOut' }}
-                className={`flex items-center space-x-3 p-3 ${themeClasses.border} overflow-x-auto scrollbar-thin ${themeClasses.bgTertiary} rounded-t-lg`}
-              >
-                {pendingFiles.map((file, index) => (
-                  <motion.div
-                    key={index}
-                    initial={{ scale: 0.8, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    transition={{ delay: index * 0.05, type: "spring", stiffness: 300 }}
-                    className="relative flex-shrink-0"
-                  >
-                    <div className={`w-16 h-16 flex items-center justify-center ${themeClasses.cardBg} rounded-lg ${themeClasses.border} overflow-hidden shadow-md`}>
-                      {file.type.startsWith('image/') ? (
-                        <img
-                          src={URL.createObjectURL(file)}
-                          alt="Preview"
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <div className="p-1 text-center">
-                          <FiFile size={18} className="mx-auto" />
-                          <p className="text-xs mt-0.5 truncate w-14">{file.name.split('.')[0]}</p>
-                        </div>
-                      )}
-                    </div>
-                    <motion.button
-                      onClick={() => {
-                        const newFiles = [...pendingFiles];
-                        newFiles.splice(index, 1);
-                        setPendingFiles(newFiles);
-                      }}
-                      className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-0.5 hover:bg-red-600 transition-all shadow"
-                      whileHover={{ scale: 1.1 }}
-                      whileTap={{ scale: 0.9 }}
-                    >
-                      <FiX size={10} />
-                    </motion.button>
-                  </motion.div>
-                ))}
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          {/* Search Mode Indicator */}
-          {searchMode && (
-            <motion.div
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.3 }}
-              className={`text-xs px-3 py-1.5 mb-2 rounded-full inline-flex items-center ${searchMode === 'deep' ? 'bg-purple-100 text-purple-800' : 'bg-blue-100 text-blue-800'}`}
-            >
-              <FiGlobe size={12} className="mr-1" />
-              {searchMode === 'deep' ? 'Pencarian Web Mendalam' : 'Pencarian Web'} aktif
-              <button 
-                onClick={() => setSearchMode(false)}
-                className="ml-2 text-current hover:text-red-500"
-              >
-                <FiX size={12} />
-              </button>
-            </motion.div>
-          )}
-
-          {/* Main Input Area */}
-          <div className="flex items-center space-x-2 mb-2">
-            <div className="relative">
-              {isListening && (
-                <div className="absolute -top-6 left-1/2 transform -translate-x-1/2 text-xs text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-800 px-2 py-0.5 rounded-full shadow-sm">
-                  Mendengarkan...
-                </div>
-              )}
-              <motion.button
-                whileHover={{ scale: 1.1 }}
-                whileTap={{ scale: 0.9 }}
-                onClick={() => {
-                  if (isListening) {
-                    stopVoiceRecognition();
-                  } else {
-                    startVoiceRecognition();
-                  }
-                }}
-                className={`p-2 rounded-full transition-all ${
-                  isListening
-                    ? 'bg-red-500 dark:bg-red-600 text-white'
-                    : `${themeClasses.bgTertiary} ${themeClasses.textPrimary}`
-                }`}
-                title={isListening ? 'Hentikan input suara' : 'Mulai input suara'}
-              >
-                <FiMic size={18} />
-              </motion.button>
-            </div>
-            <motion.button
-              whileHover={{ scale: 1.1 }}
-              whileTap={{ scale: 0.9 }}
-              onClick={() => setTtsEnabled(!ttsEnabled)}
-              className={`p-2 rounded-full transition-all ${
-                ttsEnabled 
-                  ? 'bg-blue-500 dark:bg-blue-600 text-white' 
-                  : `${themeClasses.bgTertiary} ${themeClasses.textPrimary}`
-              }`}
-              title={ttsEnabled ? 'Matikan suara' : 'Aktifkan suara'}
-            >
-              {isSpeaking ? <FiVolume2 size={18} /> : <FiVolumeX size={18} />}
-            </motion.button>
-            <motion.button
-              whileHover={{ scale: 1.1 }}
-              whileTap={{ scale: 0.9 }}
-              onClick={() => setReasonerEnabled(!reasonerEnabled)}
-              className={`p-2 rounded-full transition-all ${
-                reasonerEnabled 
-                  ? 'bg-purple-500 dark:bg-purple-600 text-white' 
-                  : `${themeClasses.bgTertiary} ${themeClasses.textPrimary}`
-              }`}
-              title={reasonerEnabled ? 'Matikan analisis' : 'Aktifkan analisis'}
-            >
-              <RiBrainLine size={18} />
-            </motion.button>
-            <motion.button
-              whileHover={{ scale: 1.1 }}
-              whileTap={{ scale: 0.9 }}
-              onClick={() => setHideSuggestions(!hideSuggestions)}
-              className={`p-2 rounded-full transition-all ${
-                !hideSuggestions 
-                  ? 'bg-blue-500 dark:bg-blue-600 text-white' 
-                  : `${themeClasses.bgTertiary} ${themeClasses.textPrimary}`
-              }`}
-              title={hideSuggestions ? 'Tampilkan saran' : 'Sembunyikan saran'}
-            >
-              {hideSuggestions ? <FiChevronDown size={18} /> : <FiChevronUp size={18} />}
-            </motion.button>
           </div>
-
-          {/* Suggested Prompts */}
-          {messages.length > 0 && messages[messages.length - 1].suggestions && !hideSuggestions && (
-            <div className="relative">
-              <div className="flex space-x-2 mb-3 overflow-x-auto scrollbar-thin pb-2 -mx-4 px-4">
-                {messages[messages.length - 1].suggestions.slice(0, 5).map((suggestion, index) => {
-                  const shortSuggestion = suggestion.split(' ').slice(0, 3).join(' ') + (suggestion.split(' ').length > 3 ? '...' : '');
-                  return (
-                    <motion.button
-                      key={index}
-                      onClick={() => handleSendMessage(suggestion)}
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                      className={`${themeClasses.cardBg} ${themeClasses.border} px-3 py-1.5 rounded-full text-sm hover:bg-blue-50 dark:hover:bg-gray-700 hover:text-blue-600 dark:hover:text-blue-400 transition-all duration-200 shadow-sm flex-shrink-0 ${themeClasses.textPrimary}`}
-                      title={suggestion}
-                    >
-                      {shortSuggestion}
-                    </motion.button>
-                  );
-                })}
-                <motion.button
-                  onClick={() => setHideSuggestions(true)}
-                  className={`flex-shrink-0 w-8 h-8 rounded-full ${themeClasses.bgTertiary} flex items-center justify-center hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors ${themeClasses.textPrimary}`}
-                  whileHover={{ scale: 1.1 }}
-                  whileTap={{ scale: 0.9 }}
-                >
-                  <FiChevronDown size={18} />
-                </motion.button>
-              </div>
-            </div>
-          )}
-
-          <motion.div 
-            className="relative mt-1"
-            initial={false}
-            animate={{ 
-              height: textareaRef.current ? Math.min(textareaRef.current.scrollHeight, 120) : 52,
-              scale: isGenerating ? 0.98 : 1
-            }}
-            transition={{ type: "spring", stiffness: 500, damping: 30 }}
-          >
-            <motion.div
-              className="relative w-full"
-              whileHover={{ scale: 1.01 }}
-              whileTap={{ scale: 0.99 }}
-            >
-              <textarea
-                ref={textareaRef}
-                value={inputMessage}
-                onChange={(e) => {
-                  setInputMessage(e.target.value);
-                  e.target.style.height = "auto";
-                  e.target.style.height = `${Math.min(e.target.scrollHeight, 120)}px`;
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    handleSendMessage(inputMessage, pendingFiles);
-                  }
-                }}
-                placeholder="Ketik pesan Anda..."
-                className={`w-full rounded-xl px-4 py-3 pr-14 
-                  focus:outline-none resize-none overflow-hidden
-                  transition-all duration-300 ease-in-out
-                  shadow-lg dark:shadow-blue-500/20
-                  ${themeClasses.inputBg} ${themeClasses.inputBorder}
-                  border-blue-100 dark:border-blue-500/20
-                  focus:border-blue-500 dark:focus:border-blue-400
-                  placeholder-gray-400 dark:placeholder-gray-500
-                  ${isGenerating ? 'opacity-50' : 'opacity-100'}
-                  ${themeClasses.inputText}
-                `}
-                rows={1}
-                style={{ 
-                  minHeight: '52px',
-                  maxHeight: '120px',
-                }}
-              />
-              <motion.div
-                className="absolute inset-0 rounded-xl pointer-events-none"
-                animate={{ 
-                  boxShadow: inputMessage ? '0 0 20px rgba(59,130,246,0.2)' : 'none',
-                  borderColor: inputMessage ? 'rgba(59,130,246,0.5)' : 'transparent'
-                }}
-                transition={{ duration: 0.3 }}
-              />
-
-              <div className="absolute right-3 bottom-3 flex items-center space-x-1.5">
-                {inputMessage && (
-                  <motion.button
-                    onClick={() => setInputMessage('')}
-                    className={`p-1.5 rounded-full ${themeClasses.hoverBg} transition-all`}
-                    whileHover={{ scale: 1.2 }}
-                    whileTap={{ scale: 0.9 }}
-                  >
-                    <FiX size={16} />
-                  </motion.button>
-                )}
-
-                <motion.button
-                  onClick={toggleSearchMode}
-                  className={`p-1.5 rounded-full transition-all ${
-                    searchMode === 'deep' ? 'bg-purple-500 text-white' : 
-                    searchMode === 'shallow' ? 'bg-blue-500 text-white' : 
-                    themeClasses.hoverBg
-                  }`}
-                  title={searchMode ? `Mode pencarian: ${searchMode}` : 'Aktifkan pencarian web'}
-                  whileHover={{ scale: 1.2 }}
-                  whileTap={{ scale: 0.9 }}
-                >
-                  <FiGlobe size={16} />
-                </motion.button>
-
-                {isBotTyping ? (
-                  <motion.button
-                    onClick={stopGeneration}
-                    className="p-1.5 rounded-full bg-red-500 hover:bg-red-600 text-white transition-all shadow"
-                    title="Hentikan generasi"
-                    whileHover={{ scale: 1.2 }}
-                    whileTap={{ scale: 0.9 }}
-                  >
-                    <FiStopCircle size={16} />
-                  </motion.button>
-                ) : (
-                  <>
-                    <motion.button
-                      onClick={() => setShowFileOptions(!showFileOptions)}
-                      className={`p-1.5 rounded-full transition-all ${showFileOptions ? `${themeClasses.bgTertiary}` : themeClasses.hoverBg}`}
-                      title="Lampirkan file"
-                      whileHover={{ scale: 1.2 }}
-                      whileTap={{ scale: 0.9 }}
-                    >
-                      <FiPlus size={16} />
-                    </motion.button>
-
-                    <motion.button
-                      onClick={() => handleSendMessage(inputMessage, pendingFiles)}
-                      disabled={(!inputMessage.trim() && pendingFiles.length === 0) || isBotTyping}
-                      className={`p-2 rounded-full transition-all duration-300 ${
-                        inputMessage.trim() || pendingFiles.length > 0
-                          ? 'bg-gradient-to-br from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white shadow-md'
-                          : 'text-gray-400 hover:text-gray-500 hover:bg-gray-100'
-                      }`}
-                      whileHover={{
-                        scale: (inputMessage.trim() || pendingFiles.length > 0) ? 1.15 : 1,
-                        rotate: (inputMessage.trim() || pendingFiles.length > 0) ? 6 : 0
-                      }}
-                      whileTap={{ scale: 0.9 }}
-                      title="Kirim pesan"
-                    >
-                      <RiSendPlaneFill size={18} />
-                    </motion.button>
-                  </>
-                )}
-              </div>
-            </motion.div>
-
-            {/* File Options */}
-            <AnimatePresence>
-              {showFileOptions && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  exit={{ opacity: 0, height: 0 }}
-                  transition={{ duration: 0.25 }}
-                  className="flex space-x-3 pt-3"
-                >
-                  <motion.label
-                    className={`cursor-pointer p-2 rounded-lg transition-all ${themeClasses.hoverBg}`}
-                    whileHover={{ scale: 1.1 }}
-                    whileTap={{ scale: 0.95 }}
-                    title="Unggah gambar"
-                  >
-                    <input
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      onChange={handleFileUpload}
-                      multiple
-                    />
-                    <FiImage size={18} />
-                  </motion.label>
-                  <motion.label
-                    className={`cursor-pointer p-2 rounded-lg transition-all ${themeClasses.hoverBg}`}
-                    whileHover={{ scale: 1.1 }}
-                    whileTap={{ scale: 0.95 }}
-                    title="Unggah file"
-                  >
-                    <input
-                      type="file"
-                      accept=".pdf,.txt,.doc,.docx,.csv"
-                      className="hidden"
-                      onChange={handleFileUpload}
-                      multiple
-                    />
-                    <FiFile size={18} />
-                  </motion.label>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </motion.div>
         </div>
-      </div>
-
-      <style jsx global>{`
-        .typing-dot {
-          opacity: 0.6;
-          animation: pulseAnimation 1s infinite;
-        }
-
-        .typing-dot:nth-child(1) {
-          animation-delay: 0s;
-        }
-
-        .typing-dot:nth-child(2) {
-          animation-delay: 0.2s;
-        }
-
-        .typing-dot:nth-child(3) {
-          animation-delay: 0.4s;
-        }
-
-        @keyframes pulseAnimation {
-          0%, 100% { opacity: 0.6; transform: scale(1); }
-          50% { opacity: 1; transform: scale(1.2); }
-        }
-
-        .code-container {
-          background: ${darkMode ? '#1e293b' : '#f8fafc'};
-          border-radius: 12px;
-          margin: 1em 0;
-          overflow: hidden;
-          border: 1px solid ${darkMode ? '#334155' : '#e2e8f0'};
-          box-shadow: 0 4px 12px rgba(0,0,0,0.03);
-          transition: all 0.25s cubic-bezier(0.4,0,0.2,1);
-        }
-        .code-container:hover {
-          box-shadow: 0 6px 16px rgba(0,0,0,0.05);
-          transform: translateY(-2px);
-        }
-
-        .code-toolbar {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          padding: 0.75em 1em;
-          background: ${darkMode ? '#1e293b' : '#f1f5f9'};
-          color: ${darkMode ? '#94a3b8' : '#475569'};
-          font-size: 0.85em;
-          border-bottom: 1px solid ${darkMode ? '#334155' : '#e2e8f0'};
-        }
-
-        .language-tag {
-          background: ${darkMode ? '#334155' : '#e2e8f0'};
-          padding: 0.3em 0.8em;
-          border-radius: 8px;
-          font-size: 0.8em;
-          font-weight: 500;
-          letter-spacing: 0.02em;
-          transition: all 0.2s ease;
-        }
-
-        .copy-button {
-          background: transparent;
-          border: 1px solid ${darkMode ? '#475569' : '#cbd5e1'};
-          color: ${darkMode ? '#e2e8f0' : '#334155'};
-          cursor: pointer;
-          padding: 0.4em 0.8em;
-          border-radius: 8px;
-          font-size: 0.8em;
-          display: flex;
-          align-items: center;
-          gap: 0.4em;
-          transition: all 0.2s ease;
-        }
-
-        .copy-button:hover {
-          background: ${darkMode ? '#334155' : '#e2e8f0'};
-          border-color: ${darkMode ? '#64748b' : '#94a3b8'};
-          transform: translateY(-1px);
-        }
-
-        .copy-button:active {
-          transform: translateY(0);
-        }
-
-        .code-block {
-          margin: 0;
-          padding: 1em;
-          color: ${darkMode ? '#f1f5f9' : '#1e293b'};
-          overflow-x: auto;
-          font-family: 'Fira Code', 'JetBrains Mono', 'Courier New', monospace;
-          font-size: 0.9em;
-          line-height: 1.6;
-          background: ${darkMode ? '#1e293b' : '#f8fafc'};
-          scrollbar-width: thin;
-          scrollbar-color: ${darkMode ? '#475569' : '#cbd5e1'} transparent;
-        }
-
-        .code-block::-webkit-scrollbar {
-          height: 6px;
-        }
-
-        .code-block::-webkit-scrollbar-thumb {
-          background: ${darkMode ? '#475569' : '#cbd5e1'};
-          border-radius: 3px;
-        }
-
-        .code-block code {
-          font-family: inherit;
-          font-variant-ligatures: contextual;
-        }
-
-        .copy-notification {
-          position: fixed;
-          bottom: 24px;
-          left: 50%;
-          transform: translateX(-50%) translateY(10px);
-          background: rgba(15,23,42,0.95);
-          color: white;
-          padding: 12px 24px;
-          border-radius: 12px;
-          font-size: 0.9em;
-          z-index: 1000;
-          animation: slideUp 0.3s ease-out forwards, fadeOut 0.5s ease-in 1.5s forwards;
-          box-shadow: 0 8px 24px rgba(0,0,0,0.15);
-          font-weight: 500;
-        }
-
-        @keyframes slideUp {
-          from { opacity: 0; transform: translateX(-50%) translateY(10px); }
-          to { opacity: 1; transform: translateX(-50%) translateY(0); }
-        }
-
-        @keyframes fadeOut {
-          to { opacity: 0; }
-        }
-
-        .chat-bubble {
-          padding: 20px 24px;
-          margin-bottom: 20px;
-          border-radius: 12px;
-          word-wrap: break-word;
-          animation: fadeInUp 0.3s ease;
-          box-shadow: 0 4px 15px rgba(0,0,0,0.08);
-          transition: all 0.3s ease;
-        }
-
-        .chat-bubble.user {
-          align-self: flex-end;
-          background-color: ${darkMode ? '#3b82f6' : '#dbeafe'};
-          color: ${darkMode ? '#f8fafc' : '#1e3a8a'};
-          margin-left: auto;
-          margin-right: 0;
-          max-width: 85%;
-          border-radius: 12px 12px 0 12px;
-        }
-
-        .chat-bubble.bot {
-          align-self: stretch;
-          background-color: ${darkMode ? '#0f172a' : '#f1f5f9'};
-          color: ${darkMode ? '#f1f5f9' : '#334155'};
-          margin: 0;
-          width: 100%;
-          border: 1px solid ${darkMode ? '#1e293b' : 'transparent'};
-          border-radius: 12px;
-        }
-
-        @keyframes fadeInUp {
-          0% {
-            opacity: 0;
-            transform: translateY(10px);
-          }
-          100% {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-
-        .chat-bubble.bot:hover {
-          background-color: ${darkMode ? '#1e293b' : '#f8fafc'};
-          transform: translateY(-1px);
-          box-shadow: 0 8px 24px rgba(0,0,0,${darkMode ? '0.4' : '0.12'});
-        }
-
-        .chat-bubble.bot::before {
-          content: '';
-          position: absolute;
-          top: 0;
-          left: 0;
-          right: 0;
-          height: 2px;
-          background: linear-gradient(to right, 
-            ${darkMode ? 'rgba(59, 130, 246, 0.6)' : 'rgba(59, 130, 246, 0.3)'}, 
-            transparent 80%
-          );
-        }
-
-        .chat-bubble.bot::after {
-          content: '';
-          position: absolute;
-          bottom: 0;
-          left: 0;
-          right: 0;
-          height: 1px;
-          background: linear-gradient(to left, 
-            ${darkMode ? 'rgba(59, 130, 246, 0.3)' : 'rgba(59, 130, 246, 0.15)'}, 
-            transparent 80%
-          );
-        }
-
-        .chat-messages {
-          padding: 0;
-          width: 100%;
-        }
-
-        .prose {
-          max-width: 100%;
-          font-size: 0.95rem;
-          line-height: 1.7;
-          color: ${darkMode ? '#e2e8f0' : '#334155'};
-        }
-
-        .prose ul {
-          list-style-type: disc;
-          padding-left: 1.5em;
-          margin: 0.5em 0;
-        }
-
-        .prose li {
-          margin: 0.25em 0;
-        }
-
-        .prose code:not(.code-block code) {
-          background: ${darkMode ? 'rgba(148,163,184,0.2)' : 'rgba(148,163,184,0.15)'};
-          padding: 0.2em 0.4em;
-          border-radius: 4px;
-          font-size: 0.85em;
-          transition: background 0.2s ease;
-        }
-
-        .prose code:not(.code-block code):hover {
-          background: ${darkMode ? 'rgba(148,163,184,0.3)' : 'rgba(148,163,184,0.25)'};
-        }
-
-        .prose strong {
-          font-weight: 600;
-          color: ${darkMode ? '#f8fafc' : '#1e293b'};
-        }
-
-        .prose a {
-          color: #3b82f6;
-          text-decoration: none;
-          transition: all 0.2s ease;
-          border-bottom: 1px solid transparent;
-        }
-
-        .prose a:hover {
-          color: #2563eb;
-          border-bottom-color: currentColor;
-        }
-
-        .prose img {
-          max-width: 100%;
-          height: auto;
-          border-radius: 8px;
-          transition: transform 0.3s ease;
-        }
-
-        .prose img:hover {
-          transform: scale(1.02);
-        }
-
-        .prose blockquote {
-          border-left: 3px solid ${darkMode ? '#334155' : '#e2e8f0'};
-          padding-left: 1.25em;
-          margin: 1em 0;
-          color: ${darkMode ? '#94a3b8' : '#475569'};
-          font-style: italic;
-          transition: border-color 0.3s ease;
-        }
-        .prose blockquote:hover {
-          border-left-color: ${darkMode ? '#64748b' : '#94a3b8'};
-        }
-
-        .table-container {
-          margin: 2em 0;
-          background: ${darkMode ? '#1e293b' : '#ffffff'};
-          border-radius: 16px;
-          box-shadow: ${darkMode ? 
-            '0 8px 32px rgba(0, 0, 0, 0.4)' : 
-            '0 8px 32px rgba(0, 0, 0, 0.1)'};
-          overflow: hidden;
-          border: 1px solid ${darkMode ? '#334155' : '#e2e8f0'};
-        }
-
-        .table-wrapper {
-          margin: 0;
-          padding: 1.5rem;
-          overflow-x: auto;
-          background: ${darkMode ? 
-            'linear-gradient(to right, #1e293b, #0f172a)' : 
-            'linear-gradient(to right, #ffffff, #f8fafc)'};
-        }
-
-        .table-title {
-          font-size: 1.1em;
-          font-weight: 600;
-          margin-bottom: 1rem;
-          color: ${darkMode ? '#60a5fa' : '#2563eb'};
-          padding-bottom: 0.5rem;
-          border-bottom: 2px solid ${darkMode ? '#334155' : '#e2e8f0'};
-          display: flex;
-          align-items: center;
-          gap: 0.5rem;
-        }
-
-        .table-title::before {
-          content: '📊';
-          font-size: 1.2em;
-        }
-
-        .markdown-table {
-          width: 100%;
-          border-collapse: separate;
-          border-spacing: 0;
-          font-size: 0.95em;
-          background: ${darkMode ? '#1e293b' : '#ffffff'};
-          border-radius: 8px;
-          overflow: hidden;
-          border: 1px solid ${darkMode ? '#334155' : '#e2e8f0'};
-        }
-
-        .markdown-table th,
-        .markdown-table td {
-          padding: 1rem 1.5rem;
-          text-align: left;
-          border-bottom: 1px solid ${darkMode ? 'rgba(51, 65, 85, 0.3)' : 'rgba(226, 232, 240, 0.5)'};
-          font-size: 0.95em;
-          line-height: 1.6;
-          white-space: nowrap;
-        }
-
-        .markdown-table td:not(:last-child),
-        .markdown-table th:not(:last-child) {
-          border-right: 1px solid ${darkMode ? 'rgba(51, 65, 85, 0.3)' : 'rgba(226, 232, 240, 0.5)'};
-        }
-
-        .markdown-table td:last-child {
-          white-space: normal;
-          min-width: 200px;
-        }
-
-        .markdown-table th:last-child,
-        .markdown-table td:last-child {
-          border-right: none;
-        }
-
-        .markdown-table tbody tr:last-child td {
-          border-bottom: none;
-        }
-
-        .markdown-table thead {
-          background: ${darkMode ? 
-            'linear-gradient(to right, #1e293b, #0f172a)' : 
-            'linear-gradient(to right, #f8fafc, #f1f5f9)'};
-          position: sticky;
-          top: 0;
-          z-index: 1;
-          box-shadow: 0 2px 4px ${darkMode ? 
-            'rgba(0, 0, 0, 0.3)' : 
-            'rgba(0, 0, 0, 0.1)'};
-        }
-
-        .markdown-table th {
-          font-weight: 600;
-          text-transform: uppercase;
-          font-size: 0.85em;
-          letter-spacing: 0.05em;
-          color: ${darkMode ? '#94a3b8' : '#475569'};
-          padding: 1.2rem 1.5rem;
-          position: relative;
-          background: ${darkMode ? 
-            'rgba(15, 23, 42, 0.8)' : 
-            'rgba(248, 250, 252, 0.8)'};
-        }
-
-        .markdown-table th::after {
-          content: '';
-          position: absolute;
-          bottom: 0;
-          left: 0;
-          right: 0;
-          height: 3px;
-          background: ${darkMode ? 
-            'linear-gradient(to right, #3b82f6, #2563eb)' : 
-            'linear-gradient(to right, #60a5fa, #3b82f6)'};
-          opacity: 0.7;
-          border-radius: 3px 3px 0 0;
-        }
-
-        .markdown-table tbody tr {
-          background: ${darkMode ? '#1e293b' : '#ffffff'};
-          transition: all 0.3s ease;
-        }
-
-        .markdown-table tbody tr:nth-child(even) {
-          background: ${darkMode ? 
-            'rgba(15, 23, 42, 0.3)' : 
-            'rgba(248, 250, 252, 0.5)'};
-        }
-
-        .markdown-table tbody tr:hover {
-          background: ${darkMode ? 
-            'rgba(51, 65, 85, 0.5)' : 
-            'rgba(241, 245, 249, 0.8)'};
-          transform: translateY(-1px);
-          box-shadow: 0 2px 8px ${darkMode ? 
-            'rgba(0, 0, 0, 0.2)' : 
-            'rgba(0, 0, 0, 0.05)'};
-        }
-
-        .markdown-table td {
-          transition: all 0.2s ease;
-          position: relative;
-        }
-
-        .markdown-table tbody tr:hover td {
-          color: ${darkMode ? '#f8fafc' : '#1e293b'};
-        }
-
-        .markdown-table tbody tr:last-child {
-          font-weight: 600;
-          background: ${darkMode ? 
-            'rgba(51, 65, 85, 0.3)' : 
-            'rgba(241, 245, 249, 0.5)'};
-        }
-
-        .markdown-table tbody tr:last-child td {
-          border-bottom: none;
-          color: ${darkMode ? '#93c5fd' : '#2563eb'};
-        }
-
-        .ascii-table-container {
-          margin: 1.5em 0;
-          padding: 1.5rem;
-          background: ${darkMode ? '#0f172a' : '#f8fafc'};
-          border-radius: 12px;
-          overflow-x: auto;
-          border: 1px solid ${darkMode ? '#334155' : '#e2e8f0'};
-          box-shadow: ${darkMode ? 
-            'inset 0 0 30px rgba(0,0,0,0.3), 0 0 20px rgba(0,0,0,0.3)' : 
-            'inset 0 0 30px rgba(0,0,0,0.05), 0 0 20px rgba(0,0,0,0.1)'};
-        }
-
-        .ascii-table {
-          font-family: 'Consolas', 'Courier New', monospace;
-          font-size: 0.9em;
-          line-height: 1.2;
-          white-space: pre;
-          color: ${darkMode ? '#a5f3fc' : '#0f172a'};
-          text-shadow: ${darkMode ? 
-            '0 0 5px rgba(165, 243, 252, 0.3)' : 
-            'none'};
-        }
-
-        @keyframes asciiGlow {
-          0% { opacity: 0.8; }
-          50% { opacity: 1; }
-          100% { opacity: 0.8; }
-        }
-
-        .ascii-table-container::before {
-          content: '$ ASCII Table Output';
-          display: block;
-          margin-bottom: 1rem;
-          font-family: 'Consolas', 'Courier New', monospace;
-          font-size: 0.8em;
-          color: ${darkMode ? '#64748b' : '#94a3b8'};
-          border-bottom: 1px solid ${darkMode ? '#334155' : '#e2e8f0'};
-          padding-bottom: 0.5rem;
-          animation: asciiGlow 2s infinite;
-        }
-
-        .prose hr {
-          border: none;
-          border-top: 1px solid ${darkMode ? '#334155' : '#e2e8f0'};
-          margin: 1.5em 0;
-          position: relative;
-        }
-
-        .prose hr::after {
-          content: "";
-          position: absolute;
-          top: -3px;
-          left: 50%;
-          transform: translateX(-50%);
-          width: 30px;
-          height: 1px;
-          background: ${darkMode ? '#64748b' : '#94a3b8'};
-        }
-      `}</style>
+      </motion.div>
     </div>
   );
-};
-
-export default ChatBot;
+}
