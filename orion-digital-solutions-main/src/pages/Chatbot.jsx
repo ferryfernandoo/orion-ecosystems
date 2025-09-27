@@ -45,7 +45,7 @@ const extractTextFromPDF = async (file) => {
   return new Promise((resolve) => {
     // Simulating for demo purposes
     setTimeout(() => {
-      resolve(Extracted text from PDF: ${file.name}\n\nThis is a simulated PDF extraction result. In a real app, we would use pdf.js to extract all text content from the PDF document.);
+      resolve(`Extracted text from PDF: ${file.name}\n\nThis is a simulated PDF extraction result. In a real app, we would use pdf.js to extract all text content from the PDF document.`);
     }, 1500);
   });
 };
@@ -54,8 +54,8 @@ const extractTextFromPDF = async (file) => {
 const performWebSearch = async (query) => {
   try {
     // First try DuckDuckGo
-    const ddgResponse = await fetch(https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1);
-    const ddgData = await ddgResponse.json();
+  const ddgResponse = await fetch(`https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1`);
+  const ddgData = await ddgResponse.json();
     
     let results = ddgData.RelatedTopics
       .filter(topic => topic.FirstURL && topic.Text)
@@ -70,12 +70,12 @@ const performWebSearch = async (query) => {
     // If no results, try Wikipedia API
     if (results.length < 3) {
       try {
-        const wikiResponse = await fetch(https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(query)}&format=json&origin=*);
-        const wikiData = await wikiResponse.json();
+  const wikiResponse = await fetch(`https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(query)}&format=json&origin=*`);
+  const wikiData = await wikiResponse.json();
         
         const wikiResults = wikiData.query?.search?.slice(0, 3).map(item => ({
           title: item.title,
-          url: https://en.wikipedia.org/wiki/${encodeURIComponent(item.title.replace(/ /g, '_'))},
+          url: `https://en.wikipedia.org/wiki/${encodeURIComponent(item.title.replace(/ /g, '_'))}`,
           snippet: item.snippet,
           source: 'Wikipedia'
         })) || [];
@@ -96,8 +96,8 @@ const performWebSearch = async (query) => {
 const scrapeWebsiteContent = async (url) => {
   try {
     // In production, use a backend service for scraping
-    const proxyUrl = https://api.allorigins.win/get?url=${encodeURIComponent(url)};
-    const response = await fetch(proxyUrl);
+  const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
+  const response = await fetch(proxyUrl);
     const data = await response.json();
     
     if (data.contents) {
@@ -191,7 +191,7 @@ const ChatBot = () => {
       try {
         if (!document.fullscreenElement) {
           document.documentElement.requestFullscreen().catch(err => {
-            console.log(Error attempting to enable fullscreen: ${err.message});
+            console.log(`Error attempting to enable fullscreen: ${err.message}`);
           });
         }
       } catch (error) {
@@ -299,7 +299,7 @@ const ChatBot = () => {
   const createNewChatRoom = () => {
     const newRoom = {
       id: Date.now().toString(),
-      name: Percakapan ${new Date().toLocaleTimeString()},
+  name: `Percakapan ${new Date().toLocaleTimeString()}`,
       messages: [],
       history: [],
       createdAt: new Date().toISOString(),
@@ -664,13 +664,12 @@ const ChatBot = () => {
       </div>`;
     });
 
-    // Process other markdown
+    // Process other markdown (safe, simple replacements)
     return withCodeBlocks
-      .replace(/\\(.?)\\*/g, '<strong>$1</strong>')
-      .replace(/\(.?)\*/g, '<em>$1</em>')
-      .replace(/(.*?)/g, '<u>$1</u>')
-      .replace(/(.*?)/g, '<s>$1</s>')
-      .replace(/(.*?)/g, '<code>$1</code>')
+      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') // bold **text**
+      .replace(/\*(.*?)\*/g, '<em>$1</em>') // italic *text*
+      .replace(/~~(.*?)~~/g, '<s>$1</s>') // strike ~~text~~
+      .replace(/`([^`]+)`/g, '<code>$1</code>') // inline `code`
       .replace(/\n/g, '<br />');
   };
 
@@ -763,7 +762,7 @@ const ChatBot = () => {
   };
 
   return (
-    <div className={flex flex-col h-screen ${themeClasses.bgPrimary} ${themeClasses.textPrimary} relative overflow-hidden transition-colors duration-300}>
+    <div className={`flex flex-col h-screen ${themeClasses.bgPrimary} ${themeClasses.textPrimary} relative overflow-hidden transition-colors duration-300`}>
       {/* Ad Banner (Top) */}
       {showAd && (
         <motion.div 
@@ -771,7 +770,7 @@ const ChatBot = () => {
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -50 }}
           transition={{ duration: 0.3 }}
-          className={w-full ${themeClasses.bgSecondary} ${themeClasses.border} p-2 flex justify-center items-center sticky top-0 z-50}
+          className={`w-full ${themeClasses.bgSecondary} ${themeClasses.border} p-2 flex justify-center items-center sticky top-0 z-50`}
         >
           <div className="text-center text-xs">
             <p className="mb-1">Dukung kami dengan menonaktifkan AdBlock</p>
@@ -794,11 +793,11 @@ const ChatBot = () => {
       )}
 
       {/* Header */}
-      <div className={${themeClasses.bgSecondary} ${themeClasses.border} p-4 flex items-center justify-between sticky top-0 z-10 shadow-sm}>
+  <div className={`${themeClasses.bgSecondary} ${themeClasses.border} p-4 flex items-center justify-between sticky top-0 z-10 shadow-sm`}>
         <div className="flex items-center space-x-3">
           <button 
             onClick={() => setShowChatHistory(!showChatHistory)}
-            className={p-2 rounded-full ${themeClasses.hoverBg} transition-colors}
+            className={`p-2 rounded-full ${themeClasses.hoverBg} transition-colors`}
             title="Riwayat Percakapan"
           >
             <FiMessageSquare size={18} className={themeClasses.textSecondary} />
@@ -828,7 +827,7 @@ const ChatBot = () => {
         <div className="flex items-center space-x-2">
           <button 
             onClick={toggleDarkMode}
-            className={p-2 rounded-full transition-colors ${themeClasses.hoverBg}}
+            className={`p-2 rounded-full transition-colors ${themeClasses.hoverBg}`}
             title={darkMode ? 'Ganti ke mode terang' : 'Ganti ke mode gelap'}
           >
             {darkMode ? <FiSun size={18} className="text-yellow-300" /> : <FiMoon size={18} />}
@@ -836,7 +835,7 @@ const ChatBot = () => {
           {/* Pro Mode and Memory buttons removed */}
           <button
             onClick={createNewChatRoom}
-            className={p-2 rounded-full ${themeClasses.hoverBg} transition-colors}
+            className={`p-2 rounded-full ${themeClasses.hoverBg} transition-colors`}
             title="Percakapan Baru"
           >
             <FiPlus size={18} />
@@ -851,15 +850,15 @@ const ChatBot = () => {
           animate={{ opacity: 1, x: 0 }}
           exit={{ opacity: 0, x: -20 }}
           transition={{ type: "spring", damping: 25 }}
-          className={absolute left-4 top-16 ${themeClasses.cardBg} rounded-xl shadow-xl z-20 ${themeClasses.border} w-80}
+          className={`absolute left-4 top-16 ${themeClasses.cardBg} rounded-xl shadow-xl z-20 ${themeClasses.border} w-80`}
         >
-          <div className={p-3 ${themeClasses.border} flex justify-between items-center}>
+          <div className={`p-3 ${themeClasses.border} flex justify-between items-center`}>
             <h4 className="font-medium text-sm flex items-center">
               <FiMessageSquare className="mr-2" size={14} /> Riwayat Percakapan
             </h4>
-            <button 
+              <button 
               onClick={() => setShowChatHistory(false)}
-              className={p-1 ${themeClasses.textSecondary} hover:${themeClasses.textPrimary}}
+              className={`p-1 ${themeClasses.textSecondary} hover:${themeClasses.textPrimary}`}
             >
               <FiX size={16} />
             </button>
@@ -870,12 +869,12 @@ const ChatBot = () => {
               <div className="p-4 text-center text-sm">
                 Belum ada riwayat percakapan
               </div>
-            ) : (
-              <div className={divide-y ${themeClasses.border}}>
+              ) : (
+              <div className={`divide-y ${themeClasses.border}`}>
                 {chatRooms.map((room) => (
                   <div 
                     key={room.id} 
-                    className={`p-3 hover:${themeClasses.bgTertiary} transition-colors cursor-pointer group ${room.id === currentRoomId ? ${themeClasses.bgTertiary} : ''}`}
+                    className={`p-3 hover:${themeClasses.bgTertiary} transition-colors cursor-pointer group ${room.id === currentRoomId ? themeClasses.bgTertiary : ''}`}
                     onClick={() => switchChatRoom(room.id)}
                   >
                     <div className="flex justify-between items-start">
@@ -913,7 +912,7 @@ const ChatBot = () => {
       {/* Chat Area */}
       <div 
         ref={chatContainerRef}
-        className={flex-1 overflow-y-auto p-4 space-y-4 scrollbar-thin scrollbar-thumb-gray-500 scrollbar-track-transparent ${themeClasses.bgPrimary}}
+        className={`flex-1 overflow-y-auto p-4 space-y-4 scrollbar-thin scrollbar-thumb-gray-500 scrollbar-track-transparent ${themeClasses.bgPrimary}`}
       >
         {messages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full pb-16">
@@ -961,13 +960,11 @@ const ChatBot = () => {
                   stiffness: 500,
                   damping: 30
                 }}
-                className={flex ${message.isBot ? 'justify-start' : 'justify-end'}}
+                className={`flex ${message.isBot ? 'justify-start' : 'justify-end'}`}
               >
                 <motion.div
                   whileHover={{ scale: 1.01 }}
-                  className={`max-w-[90%] md:max-w-[80%] ${message.isBot ? 
-                    ${themeClasses.cardBg} ${themeClasses.border} : 
-                    'bg-gradient-to-br from-blue-600 to-blue-500 text-white'} rounded-2xl p-4 shadow-xs`}
+                  className={`max-w-[90%] md:max-w-[80%] ${message.isBot ? `${themeClasses.cardBg} ${themeClasses.border}` : 'bg-gradient-to-br from-blue-600 to-blue-500 text-white'} rounded-2xl p-4 shadow-xs`}
                 >
                   {message.isBot && (
                     <div className="flex items-center mb-2">
@@ -980,7 +977,7 @@ const ChatBot = () => {
                   
                   {message.file ? (
                     <div>
-                      <p className={text-xs mb-1 ${message.isBot ? themeClasses.textTertiary : 'text-blue-100'}}>File: {message.file.name}</p>
+                      <p className={`text-xs mb-1 ${message.isBot ? themeClasses.textTertiary : 'text-blue-100'}`}>File: {message.file.name}</p>
                       {message.file.type.startsWith('image/') && (
                         <img 
                           src={URL.createObjectURL(message.file)} 
@@ -991,7 +988,7 @@ const ChatBot = () => {
                     </div>
                   ) : (
                     <div 
-                      className={text-sm ${message.isBot ? themeClasses.textPrimary : 'text-white'}}
+                      className={`text-sm ${message.isBot ? themeClasses.textPrimary : 'text-white'}`}
                       dangerouslySetInnerHTML={{ __html: message.text }} 
                     />
                   )}
@@ -1002,7 +999,7 @@ const ChatBot = () => {
                       initial={{ opacity: 0, height: 0 }}
                       animate={{ opacity: 1, height: 'auto' }}
                       transition={{ duration: 0.3 }}
-                      className={mt-3 pt-3 border-t ${themeClasses.border}}
+                      className={`mt-3 pt-3 border-t ${themeClasses.border}`}
                     >
                       <p className="text-xs font-medium mb-2">Sumber:</p>
                       <div className="space-y-2">
@@ -1031,7 +1028,7 @@ const ChatBot = () => {
                   )}
                   
                   <div className="flex items-center justify-between mt-2">
-                    <span className={text-xs ${message.isBot ? themeClasses.textTertiary : 'text-blue-100'}}>
+                    <span className={`text-xs ${message.isBot ? themeClasses.textTertiary : 'text-blue-100'}`}>
                       {message.time}
                       {message.isBot && message.duration > 0 && (
                         <span> • {(message.duration / 1000).toFixed(1)}s</span>
@@ -1067,7 +1064,7 @@ const ChatBot = () => {
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.3 }}
-              className={${themeClasses.cardBg} ${themeClasses.border} rounded-xl p-4 max-w-[90%] md:max-w-[80%]}
+              className={`${themeClasses.cardBg} ${themeClasses.border} rounded-xl p-4 max-w-[90%] md:max-w-[80%]`}
             >
               <div className="flex items-center mb-2">
                 <div className="w-6 h-6 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center mr-2 shadow">
@@ -1098,7 +1095,7 @@ const ChatBot = () => {
                         repeat: Infinity,
                         ease: "easeInOut"
                       }}
-                      className={w-6 h-6 rounded-full flex items-center justify-center mr-3 ${source.completed ? 'bg-green-500' : 'bg-blue-500'}}
+                      className={`w-6 h-6 rounded-full flex items-center justify-center mr-3 ${source.completed ? 'bg-green-500' : 'bg-blue-500'}`}
                     >
                       {source.completed ? (
                         <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1123,7 +1120,7 @@ const ChatBot = () => {
       {showScrollButton && (
         <motion.button
           onClick={scrollToBottomButton}
-          className={fixed right-6 bottom-24 w-10 h-10 rounded-full ${themeClasses.buttonBg} ${themeClasses.buttonHover} shadow-lg flex items-center justify-center z-10}
+          className={`fixed right-6 bottom-24 w-10 h-10 rounded-full ${themeClasses.buttonBg} ${themeClasses.buttonHover} shadow-lg flex items-center justify-center z-10`}
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: 20 }}
@@ -1138,7 +1135,7 @@ const ChatBot = () => {
       {/* Memory panel removed */}
 
       {/* Bottom Input Container */}
-      <div className={${themeClasses.border} ${themeClasses.bgSecondary} pt-3 pb-4 px-4}>
+  <div className={`${themeClasses.border} ${themeClasses.bgSecondary} pt-3 pb-4 px-4`}>
         
         {/* File Preview */}
         <AnimatePresence>
@@ -1148,7 +1145,7 @@ const ChatBot = () => {
               animate={{ height: 'auto', opacity: 1 }}
               exit={{ height: 0, opacity: 0 }}
               transition={{ duration: 0.3, ease: 'easeInOut' }}
-              className={flex items-center space-x-3 p-3 ${themeClasses.border} overflow-x-auto scrollbar-thin ${themeClasses.bgTertiary} rounded-t-lg}
+              className={`flex items-center space-x-3 p-3 ${themeClasses.border} overflow-x-auto scrollbar-thin ${themeClasses.bgTertiary} rounded-t-lg`}
             >
               {pendingFiles.map((file, index) => (
                 <motion.div
@@ -1158,7 +1155,7 @@ const ChatBot = () => {
                   transition={{ delay: index * 0.05, type: "spring", stiffness: 300 }}
                   className="relative flex-shrink-0"
                 >
-                  <div className={w-16 h-16 flex items-center justify-center ${themeClasses.cardBg} rounded-lg ${themeClasses.border} overflow-hidden shadow-md}>
+                  <div className={`w-16 h-16 flex items-center justify-center ${themeClasses.cardBg} rounded-lg ${themeClasses.border} overflow-hidden shadow-md`}>
                     {file.type.startsWith('image/') ? (
                       <img
                         src={URL.createObjectURL(file)}
@@ -1196,7 +1193,7 @@ const ChatBot = () => {
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3 }}
-            className={text-xs px-3 py-1.5 mb-2 rounded-full inline-flex items-center ${searchMode === 'deep' ? 'bg-purple-100 text-purple-800' : 'bg-blue-100 text-blue-800'}}
+            className={`text-xs px-3 py-1.5 mb-2 rounded-full inline-flex items-center ${searchMode === 'deep' ? 'bg-purple-100 text-purple-800' : 'bg-blue-100 text-blue-800'}`}
           >
             <FiGlobe size={12} className="mr-1" />
             {searchMode === 'deep' ? 'Pencarian Web Mendalam' : 'Pencarian Web'} aktif
@@ -1217,7 +1214,7 @@ const ChatBot = () => {
             onChange={(e) => {
               setInputMessage(e.target.value);
               e.target.style.height = "auto";
-              e.target.style.height = ${Math.min(e.target.scrollHeight, 120)}px;
+              e.target.style.height = `${Math.min(e.target.scrollHeight, 120)}px`;
             }}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
@@ -1226,7 +1223,7 @@ const ChatBot = () => {
               }
             }}
             placeholder="Ketik pesan Anda..."
-            className={w-full ${themeClasses.inputBg} ${themeClasses.inputBorder} rounded-xl px-4 py-3 pr-14 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none overflow-hidden transition-all duration-300 text-sm ${themeClasses.inputText}}
+            className={`w-full ${themeClasses.inputBg} ${themeClasses.inputBorder} rounded-xl px-4 py-3 pr-14 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none overflow-hidden transition-all duration-300 text-sm ${themeClasses.inputText}`}
             rows={1}
             style={{ minHeight: '52px', maxHeight: '120px' }}
             whileFocus={{ boxShadow: '0 0 0 3px rgba(59,130,246,0.3)' }}
@@ -1237,7 +1234,7 @@ const ChatBot = () => {
             {inputMessage && (
               <motion.button
                 onClick={() => setInputMessage('')}
-                className={p-1.5 rounded-full ${themeClasses.hoverBg} transition-all}
+                className={`p-1.5 rounded-full ${themeClasses.hoverBg} transition-all`}
                 whileHover={{ scale: 1.2 }}
                 whileTap={{ scale: 0.9 }}
               >
@@ -1252,7 +1249,7 @@ const ChatBot = () => {
                 searchMode === 'shallow' ? 'bg-blue-500 text-white' : 
                 themeClasses.hoverBg
               }`}
-              title={searchMode ? Mode pencarian: ${searchMode} : 'Aktifkan pencarian web'}
+              title={searchMode ? `Mode pencarian: ${searchMode}` : 'Aktifkan pencarian web'}
               whileHover={{ scale: 1.2 }}
               whileTap={{ scale: 0.9 }}
             >
@@ -1273,7 +1270,7 @@ const ChatBot = () => {
               <>
                 <motion.button
                   onClick={() => setShowFileOptions(!showFileOptions)}
-                  className={`p-1.5 rounded-full transition-all ${showFileOptions ? ${themeClasses.bgTertiary} : themeClasses.hoverBg}`}
+                  className={`p-1.5 rounded-full transition-all ${showFileOptions ? themeClasses.bgTertiary : themeClasses.hoverBg}`}
                   title="Lampirkan file"
                   whileHover={{ scale: 1.2 }}
                   whileTap={{ scale: 0.9 }}
@@ -1314,7 +1311,7 @@ const ChatBot = () => {
               className="flex space-x-3 pt-3"
             >
               <motion.label
-                className={cursor-pointer p-2 rounded-lg transition-all ${themeClasses.hoverBg}}
+                className={`cursor-pointer p-2 rounded-lg transition-all ${themeClasses.hoverBg}`}
                 whileHover={{ scale: 1.1 }}
                 whileTap={{ scale: 0.95 }}
                 title="Unggah gambar"
@@ -1329,7 +1326,7 @@ const ChatBot = () => {
                 <FiImage size={18} />
               </motion.label>
               <motion.label
-                className={cursor-pointer p-2 rounded-lg transition-all ${themeClasses.hoverBg}}
+                className={`cursor-pointer p-2 rounded-lg transition-all ${themeClasses.hoverBg}`}
                 whileHover={{ scale: 1.1 }}
                 whileTap={{ scale: 0.95 }}
                 title="Unggah file"
@@ -1355,7 +1352,7 @@ const ChatBot = () => {
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: 50 }}
           transition={{ duration: 0.3 }}
-          className={w-full ${themeClasses.bgSecondary} ${themeClasses.border} p-2 flex justify-center items-center sticky bottom-0 z-50}
+          className={`w-full ${themeClasses.bgSecondary} ${themeClasses.border} p-2 flex justify-center items-center sticky bottom-0 z-50`}
         >
           <div className="text-center text-xs">
             <p className="mb-1">Dukung pengembangan dengan menonaktifkan AdBlock</p>
