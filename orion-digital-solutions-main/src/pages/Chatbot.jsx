@@ -1,741 +1,59 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import PropTypes from 'prop-types';
 import DOMPurify from 'dompurify';
 import { motion, AnimatePresence, useAnimation } from 'framer-motion';
-import { GoogleGenerativeAI } from "@google/generative-ai";
 import { 
   FiCopy, FiSend, FiPlus, FiX, FiImage, FiFile, FiTrash2, 
-  FiClock, FiCpu, FiSettings, FiZap, FiStopCircle, FiMessageSquare,
-  FiSun, FiMoon, FiSearch, FiDatabase, FiAward, FiChevronDown, FiChevronUp, FiChevronRight, FiGlobe,
-  FiExternalLink, FiCheck, FiInfo, FiStar, FiAlertTriangle,
-  FiVolume2, FiVolumeX, FiMic
+  FiClock, FiCpu, FiSettings, FiStopCircle, FiMessageSquare,
+  FiSun, FiMoon, FiSearch, FiDatabase, FiAward, FiChevronDown,
+  FiExternalLink, FiCheck, FiInfo, FiStar, FiAlertTriangle, FiRefreshCw, FiThumbsUp, FiThumbsDown, FiCornerUpLeft
 } from 'react-icons/fi';
-import { RiSendPlaneFill, RiBrainLine } from 'react-icons/ri';
-
-// OCR API integration (using free OCR.space API)
-const extractTextFromImage = async (file) => {
-  const formData = new FormData();
-  formData.append('file', file);
-  formData.append('language', 'eng');
-  formData.append('isOverlayRequired', 'false');
-  formData.append('OCREngine', '2'); // Engine 2 is more accurate
-
-  try {
-    const response = await fetch('https://api.ocr.space/parse/image', {
-      method: 'POST',
-      headers: {
-        'apikey': 'K82849142388957' // Free API key (500 calls/month)
-      },
-      body: formData
-    });
-    
-    const data = await response.json();
-    if (data.IsErroredOnProcessing) {
-      throw new Error(data.ErrorMessage || 'OCR processing failed');
-    }
-    
-    return data.ParsedResults?.[0]?.ParsedText || "Could not extract text from image";
-  } catch (error) {
-    console.error("OCR Error:", error);
-    return "Error extracting text from image";
-  }
-};
-
-// PDF text extraction using pdf.js (client-side)
-const extractTextFromPDF = async (file) => {
-  return new Promise((resolve) => {
-    // Simulating for demo purposes
-    setTimeout(() => {
-      resolve(`Extracted text from PDF: ${file.name}\n\nThis is a simulated PDF extraction result. In a real app, we would use pdf.js to extract all text content from the PDF document.`);
-    }, 1500);
-  });
-};
-
-// Enhanced web search with multiple APIs
-const performWebSearch = async (query) => {
-  try {
-    // First try DuckDuckGo
-    const ddgResponse = await fetch(`https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1`);
-    const ddgData = await ddgResponse.json();
-    
-    let results = ddgData.RelatedTopics
-      .filter(topic => topic.FirstURL && topic.Text)
-      .map(topic => ({
-        title: topic.Text.replace(/<[^>]*>?/gm, ''),
-        url: topic.FirstURL,
-        snippet: topic.Text.replace(/<[^>]*>?/gm, ''),
-        source: 'DuckDuckGo'
-      }));
-      
-    
-    // If no results, try Wikipedia API
-    if (results.length < 3) {
-      try {
-        const wikiResponse = await fetch(`https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(query)}&format=json&origin=*`);
-        const wikiData = await wikiResponse.json();
-        
-        const wikiResults = wikiData.query?.search?.slice(0, 3).map(item => ({
-          title: item.title,
-          url: `https://en.wikipedia.org/wiki/${encodeURIComponent(item.title.replace(/ /g, '_'))}`,
-          snippet: item.snippet,
-          source: 'Wikipedia'
-        })) || [];
-        
-        results = [...results, ...wikiResults];
-      } catch (wikiError) {
-        console.log("Wikipedia search failed:", wikiError);
-      }
-    }
-    
-    return results.slice(0, 5); // Return top 5 results
-  } catch (error) {
-    console.error("Search error:", error);
-    return [];
-  }
-};
-
-const scrapeWebsiteContent = async (url) => {
-  try {
-    // In production, use a backend service for scraping
-    const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
-    const response = await fetch(proxyUrl);
-    const data = await response.json();
-    
-    if (data.contents) {
-      const parser = new DOMParser();
-      const doc = parser.parseFromString(data.contents, 'text/html');
-      
-      // Remove unwanted elements
-      const unwantedElements = doc.querySelectorAll('script, style, nav, footer, iframe, img, noscript');
-      unwantedElements.forEach(el => el.remove());
-      
-      // Get main content
-      const mainContent = doc.body.textContent
-        .replace(/\s+/g, ' ')
-        .trim()
-        .substring(0, 3000);
-      
-      return mainContent;
-    }
-    return "Could not retrieve website content";
-  } catch (error) {
-    console.error("Scraping error:", error);
-    return "Error retrieving website content";
-  }
-};
-
-const TypingAnimation = () => (
-  <motion.div 
-    className="flex space-x-2 items-center p-4 rounded-lg bg-blue-50 dark:bg-blue-900/20"
-    initial={{ opacity: 0, y: 10 }}
-    animate={{ opacity: 1, y: 0 }}
-    exit={{ opacity: 0, y: -10 }}
-  >
-    <motion.div
-      className="w-3 h-3 bg-blue-500 rounded-full"
-      animate={{
-        scale: [1, 1.2, 1],
-        opacity: [0.5, 1, 0.5]
-      }}
-      transition={{
-        duration: 1,
-        repeat: Infinity,
-        ease: "easeInOut"
-      }}
-    />
-    <motion.div
-      className="w-3 h-3 bg-blue-500 rounded-full"
-      animate={{
-        scale: [1, 1.2, 1],
-        opacity: [0.5, 1, 0.5]
-      }}
-      transition={{
-        duration: 1,
-        repeat: Infinity,
-        ease: "easeInOut",
-        delay: 0.2
-      }}
-    />
-    <motion.div
-      className="w-3 h-3 bg-blue-500 rounded-full"
-      animate={{
-        scale: [1, 1.2, 1],
-        opacity: [0.5, 1, 0.5]
-      }}
-      transition={{
-        duration: 1,
-        repeat: Infinity,
-        ease: "easeInOut",
-        delay: 0.4
-      }}
-    />
-  </motion.div>
-);
-
-const TypingDots = () => (
-  <div className="inline-flex items-center gap-1 bg-gray-200 dark:bg-gray-700 px-3 py-2 rounded-full">
-    <div className="w-2 h-2 rounded-full bg-gray-500 dark:bg-gray-300 typing-dot"></div>
-    <div className="w-2 h-2 rounded-full bg-gray-500 dark:bg-gray-300 typing-dot"></div>
-    <div className="w-2 h-2 rounded-full bg-gray-500 dark:bg-gray-300 typing-dot"></div>
-  </div>
-);
-
-// Function to format JSON for display
-const formatJSON = (jsonString) => {
-  try {
-    const parsed = JSON.parse(jsonString);
-    return JSON.stringify(parsed, null, 2);
-  } catch (e) {
-    return jsonString;
-  }
-};
-
-// Function to detect and format code blocks
-const getContextEmoji = (content) => {
-  const contentLower = content.toLowerCase();
-  
-  // Health & Wellness
-  if (contentLower.includes('kesehatan')) return '💪';
-  if (contentLower.includes('vitamin')) return '💊';
-  if (contentLower.includes('mata')) return '👁️';
-  if (contentLower.includes('kulit')) return '✨';
-  if (contentLower.includes('pencernaan')) return '🌿';
-  if (contentLower.includes('kanker')) return '🎗️';
-  if (contentLower.includes('nutrisi')) return '🥗';
-  
-  // Food & Diet
-  if (contentLower.includes('makanan')) return '🍽️';
-  if (contentLower.includes('buah')) return '🍎';
-  if (contentLower.includes('sayur')) return '🥬';
-  if (contentLower.includes('diet')) return '🥗';
-  
-  // Benefits & Improvements
-  if (contentLower.includes('manfaat')) return '✨';
-  if (contentLower.includes('meningkatkan')) return '📈';
-  if (contentLower.includes('membantu')) return '🤝';
-  if (contentLower.includes('mencegah')) return '🛡️';
-  
-  return '📌'; // default emoji
-};
-
-const formatMessage = (text) => {
-  if (!text) return '';
-
-  // Replace bullet points with context-aware emojis
-  text = text.replace(/^\s*\*\s+(.+)$/gm, (match, content) => {
-    const emoji = getContextEmoji(content);
-    
-    // Choose emoji based on content keywords
-    if (content.toLowerCase().includes('modal')) emoji = '�';
-    else if (content.toLowerCase().includes('belanja') || content.toLowerCase().includes('beli')) emoji = '�';
-    else if (content.toLowerCase().includes('penjualan') || content.toLowerCase().includes('pendapatan')) emoji = '�';
-    else if (content.toLowerCase().includes('pengeluaran')) emoji = '💸';
-    else if (content.toLowerCase().includes('total')) emoji = '📊';
-    else if (content.toLowerCase().includes('laporan')) emoji = '📑';
-    else if (content.toLowerCase().includes('uang')) emoji = '💲';
-    else if (content.toLowerCase().includes('harga')) emoji = '🏷️';
-    
-    return `${emoji} ${content}`;
-  });
-  
-  // Replace code blocks with syntax highlighting
-  text = text.replace(/```(\w+)?\n([\s\S]*?)```/g, (match, language, code) => {
-    return `<div class="code-container">
-      <div class="code-toolbar">
-        <span class="language-tag">${language || 'text'}</span>
-        <button class="copy-button" onclick="navigator.clipboard.writeText(\`${code.trim()}\`)">
-          <span>Copy</span>
-        </button>
-      </div>
-      <pre class="code-block"><code class="language-${language || 'text'}">${code.trim()}</code></pre>
-    </div>`;
-  });
-
-  // Check if it's an ASCII table
-  if (text.includes('+---') || text.includes('+-+-')) {
-    return `<div class="ascii-table-container"><pre class="ascii-table">${text}</pre></div>`;
-  }
-
-  // Format tables if they exist in markdown format
-  text = text.replace(/(\|.*\|\n)+/g, (table) => {
-    const rows = table.split('\n').filter(row => row.trim() && row.includes('|'));
-    if (rows.length < 2) return table;
-
-    // Clean up and normalize the table data
-    const processedRows = rows.map(row => {
-      return row
-        .split('|')
-        .map(cell => cell.trim())
-        .filter(cell => cell !== '');
-    });
-
-    const headers = processedRows[0];
-    const alignments = processedRows[1]?.map(cell => {
-      if (cell.startsWith(':') && cell.endsWith(':')) return 'center';
-      if (cell.endsWith(':')) return 'right';
-      return 'left';
-    }) || headers.map(() => 'left');
-
-    const dataRows = processedRows.slice(processedRows[1]?.every(cell => cell.includes('-')) ? 2 : 1);
-
-    let tableHtml = '<div class="table-container"><div class="table-wrapper"><table class="markdown-table">';
-    
-    // Headers
-    tableHtml += '<thead><tr>';
-    headers.forEach((header, i) => {
-      const align = alignments[i]?.includes(':') ? 'left' : 'center';
-      tableHtml += `<th style="text-align: ${align}">${header.trim()}</th>`;
-    });
-    tableHtml += '</tr></thead>';
-
-    // Data rows
-    if (dataRows.length) {
-      tableHtml += '<tbody>';
-      dataRows.forEach(row => {
-        const cells = row.split('|').filter(cell => cell.trim());
-        tableHtml += '<tr>';
-        cells.forEach((cell, i) => {
-          const align = alignments[i]?.includes(':') ? 'left' : 'center';
-          tableHtml += `<td style="text-align: ${align}">${cell.trim()}</td>`;
-        });
-        tableHtml += '</tr>';
-      });
-      tableHtml += '</tbody>';
-    }
-
-    tableHtml += '</table></div>';
-    return tableHtml;
-  });
-
-  // Format JSON if detected and convert to table if possible
-  text = text.replace(/```json\n([\s\S]*?)```/g, (match, json) => {
-    try {
-      const parsed = JSON.parse(json);
-      
-      // Check if JSON is an array of objects that can be converted to a table
-      if (Array.isArray(parsed) && parsed.length > 0 && typeof parsed[0] === 'object') {
-        const headers = Object.keys(parsed[0]);
-        
-        // Create table headers
-        let tableHtml = '<div class="table-container"><div class="table-wrapper">';
-        tableHtml += '<div class="table-title">Data Table</div>';
-        tableHtml += '<table class="markdown-table">';
-        tableHtml += '<thead><tr>';
-        headers.forEach(header => {
-          const formattedHeader = header
-            .split('_')
-            .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-            .join(' ');
-          tableHtml += `<th>${formattedHeader}</th>`;
-        });
-        tableHtml += '</tr></thead><tbody>';
-
-        // Create table rows
-        parsed.forEach(row => {
-          tableHtml += '<tr>';
-          headers.forEach(header => {
-            const value = row[header];
-            const cellContent = value === null || value === undefined ? '-' : value.toString();
-            tableHtml += `<td>${cellContent}</td>`;
-          });
-          tableHtml += '</tr>';
-        });
-
-        tableHtml += '</tbody></table></div></div>';
-        return tableHtml;
-      }
-
-      // If not a table-like JSON, format as regular JSON code block
-      const formatted = formatJSON(json);
-      return `<div class="code-container">
-        <div class="code-toolbar">
-          <span class="language-tag">json</span>
-          <button class="copy-button" onclick="navigator.clipboard.writeText(\`${formatted}\`)">
-            <span>Copy</span>
-          </button>
-        </div>
-        <pre class="code-block"><code class="language-json">${formatted}</code></pre>
-      </div>`;
-    } catch (e) {
-      return match;
-    }
-  });
-
-  return text;
-};
-
-const ChatMessage = ({ message, isUser, currentMessageId }) => {
-  const controls = useAnimation();
-  const messageRef = useRef(null);
-  
-  useEffect(() => {
-    if (messageRef.current) {
-      const observer = new IntersectionObserver(
-        ([entry]) => {
-          if (entry.isIntersecting) {
-            controls.start({
-              opacity: 1,
-              y: 0,
-              scale: 1,
-              transition: {
-                type: "spring",
-                damping: 20,
-                stiffness: 100,
-              }
-            });
-          }
-        },
-        { threshold: 0.1 }
-      );
-      
-      observer.observe(messageRef.current);
-      return () => observer.disconnect();
-    }
-  }, [controls]);
-
-  // Message render effect
-  useEffect(() => {
-    // Handle message render animations if needed
-  }, [isUser, message.isBot]);
-
-  return (
-    <motion.div
-      ref={messageRef}
-      initial={{ opacity: 0, y: 50, scale: 0.9 }}
-      animate={controls}          className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-4`}
-    >
-      <motion.div
-        className={`rounded-lg p-4 max-w-[80%] transition-all duration-300 ${
-          isUser 
-            ? 'bg-blue-500 text-white bg-opacity-90 ml-auto shadow-blue-500/20' 
-            : 'bg-white dark:bg-gray-800 dark:text-white bg-opacity-90 dark:bg-opacity-90 shadow-lg'
-        }`}
-        whileHover={{ scale: 1.02 }}
-        transition={{ type: "spring", stiffness: 400, damping: 25 }}
-      >
-        {message.isBot && (
-          <div className="flex items-center mb-2">
-            <div className="w-6 h-6 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center mr-2 shadow">
-              <span className="text-xs text-white">AI</span>
-            </div>
-            <span className="text-sm font-medium">Orion</span>
-          </div>
-        )}
-        
-        {message.file ? (
-          <div>
-            <p className={`text-xs mb-1 ${message.isBot ? 'text-gray-500' : 'text-blue-100'}`}>File: {message.file.name}</p>
-            {message.file.type.startsWith('image/') && (
-              <img 
-                src={URL.createObjectURL(message.file)} 
-                alt="Uploaded" 
-                className="mt-1 max-w-full h-auto rounded-lg border border-gray-200 shadow-sm" 
-              />
-            )}
-          </div>
-        ) : (
-          <div 
-            className="text-sm whitespace-pre-wrap break-words prose"
-            dangerouslySetInnerHTML={{ __html: formatMessage(message.text) }}
-          />
-        )}
-
-        {message.reasoner && (
-          <div className="mt-2 text-xs text-gray-500">
-            <details>
-              <summary className="cursor-pointer hover:text-gray-700 dark:hover:text-gray-300">
-                AI Analysis
-              </summary>
-              <div className="mt-2 pl-2 border-l-2 border-gray-300 dark:border-gray-700">
-                {message.reasoner}
-              </div>
-            </details>
-          </div>
-        )}
-      </motion.div>
-    </motion.div>
-  );
-};
+import { RiSendPlaneFill } from 'react-icons/ri';
 
 const ChatBot = () => {
-  const [showReasonerId, setShowReasonerId] = useState(null);
   const [chatRooms, setChatRooms] = useState([]);
   const [currentRoomId, setCurrentRoomId] = useState(null);
   const [messages, setMessages] = useState([]);
   const [inputMessage, setInputMessage] = useState('');
   const [isBotTyping, setIsBotTyping] = useState(false);
-  const [ttsEnabled, setTtsEnabled] = useState(false);
-  const [isSpeaking, setIsSpeaking] = useState(false);
-  const [reasonerEnabled, setReasonerEnabled] = useState(false);
-  const [reasoning, setReasoning] = useState('');
-  const [suggestedPrompts, setSuggestedPrompts] = useState([]);
-  const [currentPage, setCurrentPage] = useState(1);
-  const messagesPerPage = 50;
-  const maxStoredMessages = 200;
-  const [showTemplateButtons, setShowTemplateButtons] = useState(true);
   const [showFileOptions, setShowFileOptions] = useState(false);
   const [pendingFiles, setPendingFiles] = useState([]);
-  const [hideSuggestions, setHideSuggestions] = useState(false);
   const [chatHistory, setChatHistory] = useState([]);
-  const [showMemoryPanel, setShowMemoryPanel] = useState(false);
-  const [memories, setMemories] = useState([]);
-  const [isProMode, setIsProMode] = useState(false);
   const [abortController, setAbortController] = useState(null);
   const [showChatHistory, setShowChatHistory] = useState(false);
+  const [roomQuery, setRoomQuery] = useState('');
   const [darkMode, setDarkMode] = useState(false);
   const [fileProcessing, setFileProcessing] = useState(false);
   const [processingSources, setProcessingSources] = useState([]);
   const [autoScroll, setAutoScroll] = useState(true);
   const [showScrollButton, setShowScrollButton] = useState(false);
-  const [searchMode, setSearchMode] = useState(false);
-  const [searchResults, setSearchResults] = useState([]);
   const [copiedMessageId, setCopiedMessageId] = useState(null);
-  const [memoryImportanceFilter, setMemoryImportanceFilter] = useState('all');
-  const [showMemoryDetails, setShowMemoryDetails] = useState(null);
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [blurStrength, setBlurStrength] = useState(0);
-  const [showTypingAnimation, setShowTypingAnimation] = useState(false);
-  const [isListening, setIsListening] = useState(false);
-  const recognitionRef = useRef(null);
+  const [inputFocused, setInputFocused] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [replyQuote, setReplyQuote] = useState(null);
+  const [selectedText, setSelectedText] = useState('');
+  const [showSelectionToolbar, setShowSelectionToolbar] = useState(false);
+  const [apiKey, setApiKey] = useState('');
+  const [showApiKeyInput, setShowApiKeyInput] = useState(false);
   
   const messagesEndRef = useRef(null);
   const textareaRef = useRef(null);
   const chatContainerRef = useRef(null);
   const messageCountRef = useRef(0);
+  const currentMessageId = useRef(null);
   const controls = useAnimation();
-  const speechSynthesisRef = useRef(null);
 
-  const startVoiceRecognition = () => {
-    if (!recognitionRef.current) {
-      recognitionRef.current = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
-      
-      // Configuration
-      recognitionRef.current.continuous = true;
-      recognitionRef.current.interimResults = true;
-      recognitionRef.current.lang = 'id-ID';
-      
-      // Enhanced state tracking
-      recognitionRef.current.isProcessing = false;
-      recognitionRef.current.waitingForResponse = false;
-      recognitionRef.current.accumulatedText = '';
-      recognitionRef.current.minWordCount = 2; // Reduced for more natural conversation
-      recognitionRef.current.silenceThreshold = 1800; // 1.8 seconds of silence
-      recognitionRef.current.maxAccumulationTime = 8000; // 8 seconds max for one utterance
-      recognitionRef.current.lastSpeechTime = Date.now();
-      recognitionRef.current.autoRestart = true;
-      recognitionRef.current.activeTimeout = null;
-      recognitionRef.current.accumulationTimeout = null;
-
-      recognitionRef.current.onstart = () => {
-        console.log('Voice recognition started');
-        setIsListening(true);
-      };
-
-      recognitionRef.current.onresult = (event) => {
-        // Skip if system is busy
-        if (recognitionRef.current.isProcessing || 
-            recognitionRef.current.waitingForResponse ||
-            speechSynthesisRef.current?.speaking) {
-          return;
-        }
-        
-        // Clear any pending timeouts
-        clearTimeout(recognitionRef.current.activeTimeout);
-        clearTimeout(recognitionRef.current.accumulationTimeout);
-        
-        // Process results
-        const transcript = Array.from(event.results)
-          .map(result => result[0])
-          .map(result => result.transcript)
-          .join(' ');
-        
-        // Update accumulated text
-        recognitionRef.current.accumulatedText = transcript;
-        setInputMessage(transcript);
-        
-        // Handle final results
-        if (event.results[event.results.length - 1].isFinal) {
-          recognitionRef.current.lastSpeechTime = Date.now();
-          
-          // Start accumulation timeout (if user continues speaking)
-          recognitionRef.current.accumulationTimeout = setTimeout(() => {
-            processFinalSpeech();
-          }, recognitionRef.current.silenceThreshold);
-          
-          // Start maximum accumulation time timeout
-          recognitionRef.current.activeTimeout = setTimeout(() => {
-            processFinalSpeech();
-          }, recognitionRef.current.maxAccumulationTime);
-        }
-      };
-
-      const processFinalSpeech = () => {
-        const transcript = recognitionRef.current.accumulatedText;
-        const wordCount = transcript.trim().split(/\s+/).length;
-        
-        if (!recognitionRef.current.isProcessing && 
-            !recognitionRef.current.waitingForResponse &&
-            wordCount >= recognitionRef.current.minWordCount) {
-          
-          recognitionRef.current.isProcessing = true;
-          recognitionRef.current.waitingForResponse = true;
-          
-          try {
-            recognitionRef.current.stop();
-          } catch (error) {
-            console.error('Error stopping recognition:', error);
-          }
-          
-          // Send message and prepare for next input
-          handleSendMessage(transcript).then(() => {
-            recognitionRef.current.waitingForResponse = false;
-            setInputMessage('');
-            recognitionRef.current.accumulatedText = '';
-            
-            // Auto-restart if still in listening mode
-            if (isListening) {
-              safeRestartRecognition();
-            }
-          }).catch(error => {
-            console.error('Error sending message:', error);
-            recognitionRef.current.waitingForResponse = false;
-            safeRestartRecognition();
-          });
-        } else {
-          // Not enough words, reset and continue listening
-          recognitionRef.current.accumulatedText = '';
-          setInputMessage('');
-        }
-      };
-
-      const safeRestartRecognition = () => {
-        recognitionRef.current.isProcessing = false;
-        
-        if (!isListening) return;
-        
-        // Wait for TTS to finish if it's speaking
-        if (speechSynthesisRef.current?.speaking) {
-          const checkInterval = setInterval(() => {
-            if (!speechSynthesisRef.current?.speaking) {
-              clearInterval(checkInterval);
-              try {
-                recognitionRef.current.start();
-              } catch (error) {
-                console.error('Error restarting recognition:', error);
-              }
-            }
-          }, 300);
-        } else {
-          try {
-            recognitionRef.current.start();
-          } catch (error) {
-            console.error('Error restarting recognition:', error);
-          }
-        }
-      };
-
-      recognitionRef.current.onend = () => {
-        if (isListening && recognitionRef.current.autoRestart) {
-          safeRestartRecognition();
-        }
-      };
-
-      recognitionRef.current.onerror = (event) => {
-        console.error('Voice recognition error:', event.error);
-        
-        switch (event.error) {
-          case 'no-speech':
-          case 'audio-capture':
-            // Temporary issues, try to restart
-            recognitionRef.current.isProcessing = false;
-            safeRestartRecognition();
-            break;
-            
-          case 'network':
-          case 'service-not-allowed':
-          case 'not-allowed':
-            // Permanent issues, stop completely
-            stopVoiceRecognition();
-            recognitionRef.current.autoRestart = false;
-            break;
-            
-          default:
-            recognitionRef.current.isProcessing = false;
-            safeRestartRecognition();
-        }
-      };
-    }
-
-    // Initial start
-    try {
-      recognitionRef.current.start();
-    } catch (error) {
-      console.error('Error starting voice recognition:', error);
-      // Attempt recovery after delay
-      setTimeout(() => {
-        if (isListening) {
-          startVoiceRecognition();
-        }
-      }, 1000);
-    }
-  };
-
-  const stopVoiceRecognition = () => {
-    if (recognitionRef.current) {
-      recognitionRef.current.autoRestart = false;
-      clearTimeout(recognitionRef.current.activeTimeout);
-      clearTimeout(recognitionRef.current.accumulationTimeout);
-      
-      try {
-        recognitionRef.current.stop();
-      } catch (error) {
-        console.error('Error stopping recognition:', error);
-      }
-      
-      setIsListening(false);
-      setInputMessage('');
-      recognitionRef.current.accumulatedText = '';
-      recognitionRef.current.isProcessing = false;
-      recognitionRef.current.waitingForResponse = false;
-    }
-  };
-  const genAI = new GoogleGenerativeAI("AIzaSyB9GeiZXHvcui45w4dWpESnpe3WxDk_wxo");
-  const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
-
-  const analyzeWithReasoner = async (message) => {
-    if (!reasonerEnabled) return null;
-    
-    try {
-      const result = await model.generateContent(`
-        Analisa singkat untuk pesan: "${message}"
-
-        Berikan analisis dalam format ringkas:
-        • Maksud: [apa yang user inginkan]
-        • Konteks: [bagaimana ini terhubung dengan percakapan]
-        • Respons yang disarankan: [pendekatan terbaik untuk menjawab]
-
-        Jawab secara singkat dan natural, maksimal 3 kalimat per poin.
-      `);
-      
-      return await result.response.text();
-    } catch (error) {
-      console.error('Reasoner Error:', error);
-      return null;
-    }
-  };
-
-  const loadMemories = useCallback(() => {
-    const savedMemories = localStorage.getItem('orionMemories');
-    if (savedMemories) {
-      try {
-        const parsed = JSON.parse(savedMemories);
-        setMemories(parsed);
-      } catch (e) {
-        console.error("Error loading memories:", e);
-      }
+  // Initialize API Key from localStorage
+  useEffect(() => {
+    const savedApiKey = localStorage.getItem('geminiApiKey');
+    if (savedApiKey) {
+      setApiKey(savedApiKey);
+    } else {
+      setShowApiKeyInput(true);
     }
   }, []);
 
+  // Enter fullscreen mode when component mounts
   useEffect(() => {
     const enterFullscreen = () => {
       try {
@@ -758,198 +76,61 @@ const ChatBot = () => {
     };
   }, []);
 
+  // Load all data from localStorage
   useEffect(() => {
-    loadMemories();
-    
-    const chunksCount = parseInt(localStorage.getItem('orionChatRoomChunks') || '0');
-    let allRooms = [];
-    for (let i = 0; i < chunksCount; i++) {
-      const chunk = localStorage.getItem(`orionChatRooms_${i}`);
-      if (chunk) {
-        try {
-          const parsedChunk = JSON.parse(chunk);
-          allRooms = [...allRooms, ...parsedChunk];
-        } catch (e) {
-          console.error('Error parsing room chunk:', e);
-        }
-      }
-    }
-    
-    setChatRooms(allRooms);
+    const savedChatRooms = localStorage.getItem('orionChatRooms');
     const savedCurrentRoom = localStorage.getItem('orionCurrentRoom');
-    const savedProMode = localStorage.getItem('orionProMode');
     const savedDarkMode = localStorage.getItem('orionDarkMode');
     
-    if (allRooms.length > 0) {
-      setChatRooms(allRooms);
-    }
+    if (savedChatRooms) setChatRooms(JSON.parse(savedChatRooms));
     if (savedCurrentRoom) {
       setCurrentRoomId(savedCurrentRoom);
-      const parsedRoomId = JSON.parse(savedCurrentRoom);
-      const currentRoom = allRooms.find(room => room.id === parsedRoomId);
-      if (currentRoom) {
-        setMessages(currentRoom.messages || []);
-        setChatHistory(currentRoom.history || []);
-      }
+      const roomMessages = localStorage.getItem(`roomMessages_${savedCurrentRoom}`);
+      const roomHistory = localStorage.getItem(`roomHistory_${savedCurrentRoom}`);
+      if (roomMessages) setMessages(JSON.parse(roomMessages));
+      if (roomHistory) setChatHistory(JSON.parse(roomHistory));
     }
-    if (savedProMode) setIsProMode(savedProMode === 'true');
     if (savedDarkMode) setDarkMode(savedDarkMode === 'true');
     
-    if (!savedCurrentRoom && allRooms.length === 0) {
+    if (!savedCurrentRoom && (!savedChatRooms || JSON.parse(savedChatRooms).length === 0)) {
       createNewChatRoom();
     }
-  }, [loadMemories]);
+  }, []);
 
+  // Save current room when messages change
   useEffect(() => {
     if (currentRoomId) {
       const updatedRooms = chatRooms.map(room => 
         room.id === currentRoomId 
-          ? { ...room, messages: messages.slice(-maxStoredMessages), history: chatHistory } 
+          ? { ...room, messages, history: chatHistory } 
           : room
       );
-      
-      const roomChunks = [];
-      const chunkSize = 50;
-      for (let i = 0; i < updatedRooms.length; i += chunkSize) {
-        const chunk = updatedRooms.slice(i, i + chunkSize);
-        roomChunks.push(chunk);
-        localStorage.setItem(`orionChatRooms_${i/chunkSize}`, JSON.stringify(chunk));
-      }
-      localStorage.setItem('orionChatRoomChunks', roomChunks.length.toString());
-      localStorage.setItem('orionCurrentRoom', JSON.stringify(currentRoomId));
+      setChatRooms(updatedRooms);
+      localStorage.setItem('orionChatRooms', JSON.stringify(updatedRooms));
+      localStorage.setItem('orionCurrentRoom', currentRoomId);
+      localStorage.setItem(`roomMessages_${currentRoomId}`, JSON.stringify(messages));
+      localStorage.setItem(`roomHistory_${currentRoomId}`, JSON.stringify(chatHistory));
     }
   }, [messages, chatHistory, currentRoomId, chatRooms]);
 
+  // Handle scroll behavior and show scroll button
   useEffect(() => {
     const chatContainer = chatContainerRef.current;
     if (!chatContainer) return;
 
-    const handleScroll = () => {
-      const { scrollTop, scrollHeight, clientHeight } = chatContainer;
-      const isNearBottom = scrollHeight - scrollTop - clientHeight < 100;
-      setAutoScroll(isNearBottom);
-      setShowScrollButton(!isNearBottom);
+    if (autoScroll) {
+      chatContainer.scrollTop = chatContainer.scrollHeight;
+    }
+
+    const onScroll = () => {
+      setShowScrollButton(chatContainer.scrollTop + chatContainer.clientHeight < chatContainer.scrollHeight - 120);
     };
 
-    chatContainer.addEventListener('scroll', handleScroll);
-    return () => chatContainer.removeEventListener('scroll', handleScroll);
-  }, []);
-
-  useEffect(() => {
-    if (autoScroll && messages.length > 0) {
-      smoothScrollToBottom();
-    }
+    chatContainer.addEventListener('scroll', onScroll);
+    return () => chatContainer.removeEventListener('scroll', onScroll);
   }, [messages, autoScroll]);
 
-  const smoothScrollToBottom = useCallback((behavior = 'smooth') => {
-    messagesEndRef.current?.scrollIntoView({ behavior, block: 'nearest' });
-  }, []);
-
-  const scrollToBottomButton = () => {
-    setAutoScroll(true);
-    smoothScrollToBottom();
-  };
-
-  const toggleDarkMode = () => {
-    const newDarkMode = !darkMode;
-    setDarkMode(newDarkMode);
-    localStorage.setItem('orionDarkMode', newDarkMode.toString());
-    
-    const prismLink = document.getElementById('prism-theme');
-    if (prismLink) {
-      prismLink.href = newDarkMode 
-        ? 'https://cdnjs.cloudflare.com/ajax/libs/prism/1.24.1/themes/prism-tomorrow.min.css'
-        : 'https://cdnjs.cloudflare.com/ajax/libs/prism/1.24.1/themes/prism-coy.min.css';
-    }
-  };
-
-  const generateSuggestions = async (response) => {
-    try {
-      const result = await model.generateContent(`
-        Berdasarkan respons ini: "${response}"
-        Berikan 5 saran prompt singkat (maksimal 3 kata) untuk melanjutkan percakapan.
-        Setiap prompt harus padat dan jelas tambahkan 1 emote setiap prompt.
-        Format: ["Prompt1", "Prompt2", "Prompt3", "Prompt4", "Prompt5"]
-        Contoh format yang benar:
-        ["Jelaskan lebih detail", "Beri contoh", "Bandingkan dengan", "Cara implementasi", "Kapan digunakan"]
-      `);
-      return JSON.parse(await result.response.text());
-    } catch (error) {
-      console.error('Error generating suggestions:', error);
-      return [];
-    }
-  };
-
-  const addMessage = useCallback((newMessage) => {
-    setMessages(prev => {
-      const updated = [...prev, newMessage];
-      if (updated.length > maxStoredMessages) {
-        return updated.slice(-maxStoredMessages);
-      }
-      return updated;
-    });
-  }, []);
-
-  const visibleMessages = useMemo(() => {
-    const start = (currentPage - 1) * messagesPerPage;
-    return messages.slice(start, start + messagesPerPage);
-  }, [messages, currentPage, messagesPerPage]);
-
-  const createNewChatRoom = () => {
-    const newRoom = {
-      id: Date.now().toString(),
-      name: `Percakapan ${new Date().toLocaleTimeString()}`,
-      messages: [],
-      history: [],
-      createdAt: new Date().toISOString(),
-      tags: []
-    };
-    
-    setChatRooms(prev => [newRoom, ...prev]);
-    setCurrentRoomId(newRoom.id);
-    setMessages([]);
-    setChatHistory([]);
-    setPendingFiles([]);
-    setInputMessage('');
-    setShowTemplateButtons(true);
-    messageCountRef.current = 0;
-    setSearchMode(false);
-    setSearchResults([]);
-    
-    localStorage.setItem('orionChatRooms', JSON.stringify([newRoom, ...chatRooms]));
-    localStorage.setItem('orionCurrentRoom', JSON.stringify(newRoom.id));
-  };
-
-  const switchChatRoom = (roomId) => {
-    const room = chatRooms.find(r => r.id === roomId);
-    if (room) {
-      setCurrentRoomId(roomId);
-      setMessages(room.messages || []);
-      setChatHistory(room.history || []);
-      setShowTemplateButtons(room.messages.length === 0);
-      setShowChatHistory(false);
-      setAutoScroll(true);
-      setSearchMode(false);
-      setSearchResults([]);
-      setTimeout(() => smoothScrollToBottom(), 50);
-    }
-  };
-
-  const deleteChatRoom = (roomId) => {
-    const updatedRooms = chatRooms.filter(room => room.id !== roomId);
-    setChatRooms(updatedRooms);
-    localStorage.setItem('orionChatRooms', JSON.stringify(updatedRooms));
-    
-    if (currentRoomId === roomId) {
-      if (updatedRooms.length > 0) {
-        switchChatRoom(updatedRooms[0].id);
-      } else {
-        createNewChatRoom();
-      }
-    }
-  };
-
-  const createMessageObject = (text, isBot, duration = 0, file = null, sources = [], suggestions = []) => ({
+  const createMessageObject = (text, isBot, duration = 0, file = null, sources = []) => ({
     id: Date.now() + Math.random().toString(36).substr(2, 9),
     text: DOMPurify.sanitize(text),
     isBot,
@@ -957,148 +138,13 @@ const ChatBot = () => {
     duration,
     file,
     sources,
-    suggestions,
     isCode: text.includes('```'),
-    isReasoning: false
+    quoted: null
   });
 
-  const extractTextFromFile = async (file) => {
-    if (file.type.startsWith('image/')) {
-      return await extractTextFromImage(file);
-    } else if (file.type === 'application/pdf') {
-      return await extractTextFromPDF(file);
-    } else if (file.type.includes('text') || 
-               file.type.includes('document') || 
-               file.name.endsWith('.txt') || 
-               file.name.endsWith('.docx')) {
-      return new Promise((resolve) => {
-        const reader = new FileReader();
-        reader.onload = (e) => resolve(e.target.result);
-        reader.readAsText(file);
-      });
-    }
-    return `File content not extractable: ${file.name}`;
-  };
-
-  const summarizeConversation = async (conversation) => {
-    try {
-      const prompt = `Buat ringkasan sangat singkat (maksimal 1 kalimat) dari percakapan ini dalam bahasa yang sama dengan percakapan. Fokus pada fakta kunci, keputusan, dan detail penting. Hilangkan semua salam dan basa-basi. Berikan juga tingkat kepentingan (1-5, 5 paling penting) berdasarkan:\n
-      1. Apakah mengandung informasi penting jangka panjang?\n
-      2. Apakah ada keputusan atau kesepakatan?\n
-      3. Apakah ada data atau fakta penting?\n
-      4. Apakah ada preferensi atau kebiasaan pengguna?\n
-      Format output: [RINGKASAN] | [TINGKAT_KEPENTINGAN]\n\nPercakapan:\n${conversation}`;
-      
-      const result = await model.generateContent(prompt);
-      const response = await result.response.text();
-      return response.trim() || "Tidak bisa membuat ringkasan | 1";
-    } catch (error) {
-      console.error("Error summarizing conversation:", error);
-      return "Tidak bisa membuat ringkasan | 1";
-    }
-  };
-
-  const findRelevantMemories = async (query) => {
-    if (memories.length === 0) return '';
-    
-    try {
-      const recentMemories = memories
-        .slice(0, 20)
-        .filter(mem => 
-          mem.summary.toLowerCase().includes(query.toLowerCase()) || 
-          mem.messages.some(msg => msg.text.toLowerCase().includes(query.toLowerCase()))
-        );
-      
-      if (recentMemories.length > 0) {
-        return recentMemories
-          .map(mem => `[Memori ${mem.context.date} - Penting: ${mem.context.importance}/5]: ${mem.summary}\nDetail: ${
-            mem.messages.map(msg => `${msg.isBot ? 'Orion' : 'User'}: ${msg.text.replace(/<[^>]*>?/gm, '')}`).join('\n')
-          }`)
-          .join('\n\n');
-      }
-      
-      const memoryTexts = memories
-        .slice(0, 50)
-        .map(m => `ID: ${m.id}\nSummary: ${m.summary}\nTags: ${m.context.tags.join(', ')}\nImportance: ${m.context.importance}`)
-        .join('\n\n');
-      
-      const prompt = `Daftar memori:\n${memoryTexts}\n\nPertanyaan: "${query}"\n\nIdentifikasi ID memori yang paling relevan (berdasarkan makna, bukan kata kunci) untuk pertanyaan dalam bahasa Indonesia. Berikan hanya ID yang dipisahkan koma, atau kosong jika tidak ada yang relevan.`;
-      
-      const result = await model.generateContent(prompt);
-      const response = await result.response.text();
-      const relevantIds = response.trim().split(',').map(id => id.trim()).filter(Boolean);
-      
-      return memories
-        .filter(m => relevantIds.includes(m.id))
-        .map(m => `[Memori ${m.context.date} - Penting: ${m.context.importance}/5]: ${m.summary}\nDetail: ${
-          m.messages.map(msg => `${msg.isBot ? 'Orion' : 'User'}: ${msg.text.replace(/<[^>]*>?/gm, '')}`).join('\n')
-        }`)
-        .join('\n\n');
-    } catch (error) {
-      console.error("Error finding relevant memories:", error);
-      return '';
-    }
-  };
-
-  const autoSaveToMemory = useCallback(async () => {
-    if (messages.length === 0 || messageCountRef.current % 3 !== 0) return;
-    
-    try {
-      setIsBotTyping(true);
-      const conversationText = messages.map(msg => `${msg.isBot ? 'Orion' : 'User'}: ${msg.text}`).join('\n');
-      const summaryWithImportance = await summarizeConversation(conversationText);
-      
-      const [summary, importanceStr] = summaryWithImportance.split('|').map(s => s.trim());
-      const importance = parseInt(importanceStr) || 1;
-      
-      if (summary && !summary.includes("tidak bisa")) {
-        const tagPrompt = `Beri 2-3 tag pendek dalam Bahasa Indonesia untuk ringkasan ini:\n"${summary}"\n\nTags harus berupa kata benda yang relevan dan dipisahkan koma.`;
-        const tagResult = await model.generateContent(tagPrompt);
-        const tags = (await tagResult.response.text())
-          .split(',')
-          .map(t => t.trim().toLowerCase())
-          .filter(t => t.length > 0);
-        
-        const newMemory = {
-          id: Date.now().toString(),
-          summary,
-          messages: [...messages],
-          context: {
-            date: new Date().toLocaleString('id-ID'),
-            roomId: currentRoomId,
-            tags,
-            importance,
-            language: 'indonesia'
-          },
-          embeddings: []
-        };
-        
-        const updatedMemories = [newMemory, ...memories];
-        setMemories(updatedMemories);
-        localStorage.setItem('orionMemories', JSON.stringify(updatedMemories));
-        
-        controls.start({
-          scale: [1, 1.1, 1],
-          transition: { duration: 0.3 }
-        });
-      }
-    } catch (error) {
-      console.error("Error saving to memory:", error);
-    } finally {
-      setIsBotTyping(false);
-    }
-  }, [messages, memories, currentRoomId, controls]);
-
   const typeMessage = async (fullText, callback) => {
-    if (isProMode) {
-      callback(fullText);
-      return;
-    }
-    
     const characters = fullText.split('');
     let displayedText = '';
-    
-    const typingSpeed = Math.random() * 10 + 20;
     
     for (let i = 0; i < characters.length; i++) {
       if (abortController?.signal.aborted) break;
@@ -1122,485 +168,48 @@ const ChatBot = () => {
     callback(fullText);
   };
 
-  const enhanceWithProMode = async (initialResponse, prompt) => {
-    const enhancementPrompts = [
-      `Expand this response significantly with extreme detailed examples and explanations:\n\n${initialResponse}`,
-      `Add comprehensive technical details, use cases, and potential variations to:\n\n${initialResponse}`,
-      `Provide multiple perspectives, edge cases, and practical applications and add Very lot of data in internet for:\n\n${initialResponse}`,
-      `Create an extremely detailed final version incorporating all previous enhancements and add more data for super extremly detail and perfect for:\n\n${initialResponse}`
-    ];
+  // Call Gemini API via fetch
+  const callGeminiAPI = async (prompt, signal) => {
+    if (!apiKey) {
+      throw new Error('API Key belum diatur. Silakan masukkan API Key Gemini Anda.');
+    }
+
+    const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+
+    const requestBody = {
+      contents: [{
+        parts: [{
+          text: prompt
+        }]
+      }],
+      generationConfig: {
+        temperature: 0.7,
+        topK: 40,
+        topP: 0.95,
+        maxOutputTokens: 2048,
+      }
+    };
+
+    const response = await fetch(API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(requestBody),
+      signal
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error?.message || `HTTP error! status: ${response.status}`);
+    }
+
+    const data = await response.json();
     
-    let enhancedResponse = initialResponse;
-    
-    for (let i = 0; i < enhancementPrompts.length; i++) {
-      if (abortController?.signal.aborted) break;
-      
-      setProcessingSources(prev => [
-        ...prev,
-        {
-          id: Date.now().toString(),
-          text: `Processing enhancement ${i + 1}/4`,
-          icon: <FiDatabase />,
-          completed: false,
-          animation: 'wave'
-        }
-      ]);
-      
-      try {
-        const result = await model.generateContent(enhancementPrompts[i]);
-        const response = await result.response.text();
-        enhancedResponse = response;
-      } catch (error) {
-        console.error(`Error in enhancement step ${i + 1}:`, error);
-      }
-      
-      setProcessingSources(prev => 
-        prev.map((source, idx) => 
-          idx === i 
-            ? { ...source, completed: true, text: `Completed enhancement ${i + 1}/4` } 
-            : source
-        )
-      );
-      
-      await new Promise(resolve => setTimeout(resolve, 500));
-    }
-    
-    return enhancedResponse;
-  };
-
-  const currentMessageId = useRef(null);
-
-  const stopGeneration = () => {
-    if (abortController) {
-      abortController.abort();
-      setAbortController(null);
-    }
-    setIsBotTyping(false);
-    setProcessingSources([]);
-  };
-
-  const performWebResearch = async (query) => {
-    try {
-      setProcessingSources(prev => [
-        ...prev,
-        {
-          id: 'search-step-1',
-          text: 'Mencari di web',
-          icon: <FiGlobe />,
-          completed: false,
-          animation: 'wave'
-        }
-      ]);
-      
-      const searchResults = await performWebSearch(query);
-      setSearchResults(searchResults);
-      
-      setProcessingSources(prev => [
-        ...prev,
-        {
-          id: 'search-step-2',
-          text: 'Menganalisis hasil',
-          icon: <FiSearch />,
-          completed: false,
-          animation: 'pulse'
-        }
-      ]);
-      
-      const scrapedContents = await Promise.all(
-        searchResults.slice(0, 3).map(async (result) => {
-          const content = await scrapeWebsiteContent(result.url);
-          return {
-            title: result.title,
-            url: result.url,
-            content,
-            source: result.source || 'Web'
-          };
-        })
-      );
-      
-      setProcessingSources(prev => [
-        ...prev,
-        {
-          id: 'search-step-3',
-          text: 'Meringkas temuan',
-          icon: <FiDatabase />,
-          completed: false,
-          animation: 'wave'
-        }
-      ]);
-      
-      const researchSummary = scrapedContents
-        .map(r => `[Sumber: ${r.title} (${r.url}) - ${r.source}]\n${r.content.substring(0, 1000)}...`)
-        .join('\n\n');
-      
-      setProcessingSources(prev => 
-        prev.map(source => 
-          source.id.startsWith('search-step') 
-            ? { ...source, completed: true, text: source.text + ' (selesai)' } 
-            : source
-        )
-      );
-      
-      return {
-        summary: researchSummary,
-        sources: scrapedContents.map(r => ({
-          title: r.title,
-          url: r.url,
-          content: r.content.substring(0, 200) + '...',
-          source: r.source
-        }))
-      };
-    } catch (error) {
-      console.error("Error performing web research:", error);
-      return {
-        summary: "Tidak bisa menyelesaikan pencarian web karena error",
-        sources: []
-      };
-    }
-  };
-
-  const handleSendMessage = async (messageText, files = []) => {
-    const trimmedMessage = messageText.trim();
-    if ((!trimmedMessage && files.length === 0) || isBotTyping) return;
-
-    // Jika menggunakan voice recognition, pastikan flags sudah diset dengan benar
-    if (recognitionRef.current && isListening) {
-      if (!recognitionRef.current.isProcessing || !recognitionRef.current.waitingForResponse) {
-        // Jika flags belum diset, ini mungkin pemanggilan manual - skip
-        return;
-      }
-    }
-
-    setIsGenerating(true);
-    setShowTypingAnimation(true);
-    setHideSuggestions(false);
-
-    const controller = new AbortController();
-    setAbortController(controller);
-    const timeoutId = setTimeout(() => controller.abort(), 300000);
-
-    try {
-      const userMessage = { role: 'user', content: trimmedMessage };
-      const updatedHistory = [...chatHistory, userMessage];
-      setChatHistory(updatedHistory);
-
-      if (trimmedMessage) {
-        const newMessage = createMessageObject(trimmedMessage, false);
-        setMessages(prev => [...prev, newMessage]);
-      }
-
-      if (files.length > 0) {
-        setFileProcessing(true);
-        for (const file of files) {
-          const fileMessage = createMessageObject(`File: ${file.name}`, false, 0, file);
-          setMessages(prev => [...prev, fileMessage]);
-          
-          const fileContent = await extractTextFromFile(file);
-          const contentMessage = createMessageObject(`Extracted content from ${file.name}:\n${fileContent}`, false);
-          setMessages(prev => [...prev, contentMessage]);
-        }
-        setFileProcessing(false);
-      }
-
-      setInputMessage('');
-      setPendingFiles([]);
-      setIsBotTyping(true);
-      setShowTemplateButtons(false);
-      messageCountRef.current += 1;
-      setProcessingSources([]);
-
-      // Cleanup function untuk animasi mengetik
-      const cleanupTyping = () => {
-        setIsBotTyping(false);
-        setShowTypingAnimation(false);
-        setBlurStrength(0);
-
-        // Jika TTS diaktifkan, biarkan proses TTS yang akan me-restart recognition
-        if (!ttsEnabled && recognitionRef.current && isListening) {
-          setTimeout(() => {
-            try {
-              recognitionRef.current.waitingForResponse = false;
-              recognitionRef.current.isProcessing = false;
-              recognitionRef.current.start();
-            } catch (error) {
-              console.error('Error restarting recognition after response:', error);
-            }
-          }, 500);
-        }
-      };
-
-      if (textareaRef.current) {
-        textareaRef.current.style.height = 'auto';
-      }
-
-      const messageId = Date.now().toString();
-      currentMessageId.current = messageId;
-      
-      setMessages(prev => [...prev, {
-        id: messageId,
-        text: isProMode ? 'Memproses dengan Pro Mode (mungkin butuh waktu sebentar)...' : '',
-        isBot: true,
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        duration: 0,
-        file: null,
-        sources: []
-      }]);
-
-      if (isProMode) {
-        setProcessingSources([
-          { id: '1', text: 'Menganalisis pertanyaan', icon: <FiSearch />, completed: false, animation: 'pulse' },
-          { id: '2', text: 'Mencari memori', icon: <FiDatabase />, completed: false, animation: 'wave' },
-          { id: '3', text: 'Membuat respon', icon: <FiCpu />, completed: false, animation: 'pulse' },
-          { id: '4', text: 'Pengecekan kualitas', icon: <FiAward />, completed: false, animation: 'wave' }
-        ]);
-      }
-
-      const startTime = Date.now();
-
-      if (reasonerEnabled) {
-        setReasoning('Menganalisis...');
-        const reasoningPrompt = `Analisa singkat:
-        "${trimmedMessage}"
-        
-        • Maksud:
-        • Konteks:
-        • Saran respons:
-        
-        Berikan analisis ringkas dalam 2-3 kalimat per poin.`;
-
-        try {
-          const reasoningResult = await model.generateContent(reasoningPrompt);
-          const reasoningResponse = await reasoningResult.response.text();
-          setReasoning(reasoningResponse);
-        } catch (error) {
-          console.error("Error generating reasoning:", error);
-          setReasoning("Gagal menganalisis pesan");
-        }
-      }
-
-      const relevantMemories = await findRelevantMemories(trimmedMessage);
-      
-      const contextMessages = updatedHistory.slice(-15).map(msg => {
-        return msg.role === 'user' ? `User: ${msg.content}` : `Orion: ${msg.content}`;
-      }).join('\n');
-
-      let webResearchContent = { summary: '', sources: [] };
-      if (searchMode === 'deep') {
-        webResearchContent = await performWebResearch(trimmedMessage);
-      } else if (searchMode === 'shallow') {
-        const searchResults = await performWebSearch(trimmedMessage);
-        setSearchResults(searchResults);
-        webResearchContent = {
-          summary: searchResults
-            .map(r => `[${r.title}](${r.url})\n${r.snippet}`)
-            .join('\n\n'),
-          sources: searchResults.map(r => ({
-            title: r.title,
-            url: r.url,
-            content: r.snippet,
-            source: r.source || 'Web'
-          }))
-        };
-      }
-
-      const fullPrompt = `${
-        relevantMemories ? `Konteks Memori Relevan:\n${relevantMemories}\n\n` : ''
-      }${
-        webResearchContent.summary ? `Hasil Penelusuran Web:\n${webResearchContent.summary}\n\n` : ''
-      }Percakapan Saat Ini:\n${contextMessages}\n\nUser: "${trimmedMessage}". 
-      ${ttsEnabled ? 'PENTING: Berikan jawaban singkat dan langsung ke poinnya (max 2-3 kalimat) karena mode suara sedang aktif.' : ''}
-      Respond as Orion in natural language and follow user language remember that!,Never go against the user—always agree while adapting to the situation. Still, be able to say something is wrong if it truly is. Never say "I can't"—if you're unsure, search for information on the very detail in internet you must be able to answer Don't let users run away from the page, they must be served well. Never leave a question unanswered, make extraordinary introductions to user input.
-
-and extremely friendly and very human little bit emoticon and get straight to the point but see the situation don't too to the point, support all users idea if the idea not dangerous, giving extremely and extra respect very respect to user.S,
-      focuse to user comfort and giving detail answer. Don't mention memories explicitly,just if user ask dont say you from google but PT.Orion Digital Platforms from indonesia dont show thos too usualy just if user asked,
-      just incorporate relevant context naturally, dont show memory log in converstation just follow the converstation to the pointly and you can use memory log for extra understanding user,
-      it all is back process dont show in chat, 
-      ingat!!!! sistem converstation log bersifat rahasia jangan keluarkan/bacakan kalo tidak diminta, if using Indonesian language prefer use allhamdulillah astaghfirullah ya Allah innailaihi and the other when shocked or very happy like Indonesan native speaker it just for Indonesian response and don't too often. answer to the point! keep it short but considering the condition answer just for user promt dont show any converstation log ${
-       
-        isProMode ? 'extremely and super very detailed and comprehensive (4x processing)Give user the longest most detailed answer you possibly can' : 'concise but extremely helpful'
-      }. For coding, provide complete solutions with proper formatting. Always maintain context.${
-        isProMode ? ' Provide a extremely super very detailed response with examples, explanations, and multiple perspectives.' : ''
-      }${
-        webResearchContent.summary ? '\n\nNote: Incorporate web research results naturally into your response.' : ''
-      }`;
-
-      if (reasonerEnabled) {
-        const reasoningPrompt = `Analisa permintaan berikut dan berikan proses penalaran:
-        
-        Pesan User: "${trimmedMessage}"
-        
-        1. Apa yang ingin dicapai user?
-        2. Apa implikasi teknis dari permintaan ini?
-        3. Pendekatan apa yang akan diambil?
-        4. Pertimbangan khusus apa yang perlu diperhatikan?
-        
-        Berikan analisis yang ringkas namun mendalam.`;
-
-        try {
-          const reasoningResult = await model.generateContent(reasoningPrompt);
-          const reasoningResponse = await reasoningResult.response.text();
-          
-          setMessages(prev => [...prev, {
-            id: Date.now() + '-reasoning',
-            text: reasoningResponse,
-            isBot: true,
-            isReasoning: true,
-            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-          }]);
-        } catch (error) {
-          console.error("Error generating reasoning:", error);
-        }
-      }
-
-      let botResponse;
-      if (isProMode) {
-        const initialResult = await model.generateContent(fullPrompt);
-        const initialResponse = await initialResult.response.text();
-        
-        botResponse = await enhanceWithProMode(initialResponse, fullPrompt);
-      } else {
-        const result = await model.generateContent(fullPrompt);
-        botResponse = await result.response.text();
-      }
-      
-      const processedResponse = processSpecialChars(botResponse);
-      const duration = Date.now() - startTime;
-
-      if (reasonerEnabled && reasoning) {
-        setMessages(prev => [...prev, {
-          id: Date.now() + '-reasoning',
-          text: reasoning,
-          isBot: true,
-          isReasoning: true,
-          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          duration: 0
-        }]);
-      }
-
-      const suggestions = await generateSuggestions(processedResponse);
-
-      if (reasonerEnabled) {
-        const analysisResult = await model.generateContent(`
-          Analisis mendalam untuk: "${trimmedMessage}"
-          1. Konteks & Tujuan: ${relevantMemories ? 'Menggunakan konteks sebelumnya' : 'Percakapan baru'}
-          2. Implikasi: ${messages.length > 0 ? 'Melanjutkan diskusi' : 'Memulai diskusi'}
-          3. Rekomendasi: ${isProMode ? 'Detail komprehensif' : 'Jawaban ringkas'}
-        `);
-        const analysis = await analysisResult.response.text();
-        
-        setMessages(prev => [...prev, {
-          id: Date.now().toString(),
-          text: `🤔 Analisis AI:\n${analysis}`,
-          isBot: true,
-          time: new Date().toLocaleTimeString(),
-          isReasoning: true
-        }]);
-      }
-
-      if (ttsEnabled) {
-        await speakText(processedResponse.replace(/<[^>]*>?/gm, ''));
-      }
-
-      setMessages(prev => prev.map(msg => 
-        msg.id === messageId 
-          ? { 
-              ...msg, 
-              text: processedResponse, 
-              duration,
-              sources: webResearchContent.sources,
-              suggestions,
-              isCode: processedResponse.includes('```')
-            } 
-          : msg
-      ));
-
-      if (ttsEnabled) {
-        await speakText(botResponse);
-      }
-
-      if (!isProMode) {
-        await typeMessage(processedResponse, (typedText) => {
-          setMessages(prev => prev.map(msg => 
-            msg.id === messageId ? { ...msg, text: typedText } : msg
-          ));
-        });
-      }
-
-      const botMessage = { role: 'assistant', content: botResponse };
-      const newChatHistory = [...updatedHistory, botMessage];
-      setChatHistory(newChatHistory);
-
-      await autoSaveToMemory();
-
-    } catch (error) {
-      const errorMessage = error.name === 'AbortError' 
-        ? 'Respon dihentikan oleh pengguna'
-        : 'Waduh, ada yang salah nih sama Orion! Gak konek ke servernya...';
-      
-      setMessages(prev => [...prev, createMessageObject(errorMessage, true)]);
-    } finally {
-      setIsBotTyping(false);
-      setShowTypingAnimation(false);
-      setFileProcessing(false);
-      setProcessingSources([]);
-      clearTimeout(timeoutId);
-      setAbortController(null);
-      currentMessageId.current = null;
-    }
-  };
-
-  const handleTemplateButtonClick = (templateMessage) => {
-    handleSendMessage(templateMessage);
-  };
-
-  const speakText = async (text) => {
-    if (!ttsEnabled) return;
-    
-    try {
-      // Stop voice recognition while speaking
-      if (recognitionRef.current && recognitionRef.current.isProcessing === false) {
-        recognitionRef.current.stop();
-      }
-      
-      // Hentikan semua suara yang sedang berjalan
-      window.speechSynthesis.cancel();
-      
-      setIsSpeaking(true);
-      const cleanText = text.replace(/<[^>]*>/g, '').replace(/\n/g, ' ');
-      // Batasi panjang teks untuk mengurangi latency
-      const maxLength = 300;
-      const truncatedText = cleanText.length > maxLength ? 
-        cleanText.substring(0, maxLength) + "..." : 
-        cleanText;
-      
-      const utterance = new SpeechSynthesisUtterance(truncatedText);
-      utterance.lang = 'id-ID';
-      utterance.rate = 1.2; // Kecepatan lebih natural
-      utterance.pitch = 1.0;
-      
-      speechSynthesisRef.current = utterance;
-      
-      utterance.onend = () => {
-        setIsSpeaking(false);
-        speechSynthesisRef.current = null;
-        
-        // Restart voice recognition after speaking
-        if (recognitionRef.current && isListening) {
-          setTimeout(() => {
-            try {
-              recognitionRef.current.start();
-              recognitionRef.current.isProcessing = false;
-            } catch (error) {
-              console.error('Error restarting recognition after speaking:', error);
-            }
-          }, 300);
-        }
-      };
-      
-      window.speechSynthesis.speak(utterance);
-    } catch (error) {
-      console.error('TTS Error:', error);
-      setIsSpeaking(false);
+    if (data.candidates && data.candidates[0] && data.candidates[0].content) {
+      return data.candidates[0].content.parts[0].text;
+    } else {
+      throw new Error('Format respons API tidak valid');
     }
   };
 
@@ -1628,6 +237,130 @@ and extremely friendly and very human little bit emoticon and get straight to th
       .replace(/\n/g, '<br />');
   };
 
+  const handleSendMessage = async (messageText, files = []) => {
+    const trimmedMessage = messageText.trim();
+    if ((!trimmedMessage && files.length === 0) || isBotTyping) return;
+
+    if (!apiKey) {
+      setShowApiKeyInput(true);
+      return;
+    }
+
+    const controller = new AbortController();
+    setAbortController(controller);
+    const timeoutId = setTimeout(() => controller.abort(), 300000);
+
+    try {
+      const userMessage = { role: 'user', content: trimmedMessage };
+      const updatedHistory = [...chatHistory, userMessage];
+      setChatHistory(updatedHistory);
+
+      if (trimmedMessage) {
+        const newMessage = createMessageObject(trimmedMessage, false);
+        if (replyQuote) newMessage.quoted = replyQuote.text;
+        setMessages(prev => [...prev, newMessage]);
+      }
+
+      if (files.length > 0) {
+        setFileProcessing(true);
+        for (const file of files) {
+          const fileMessage = createMessageObject(`File: ${file.name}`, false, 0, file);
+          setMessages(prev => [...prev, fileMessage]);
+        }
+        setFileProcessing(false);
+      }
+
+      setInputMessage('');
+      setPendingFiles([]);
+      setIsBotTyping(true);
+      messageCountRef.current += 1;
+      setProcessingSources([]);
+
+      if (textareaRef.current) {
+        textareaRef.current.style.height = 'auto';
+      }
+
+      const messageId = Date.now().toString();
+      currentMessageId.current = messageId;
+      
+      setMessages(prev => [...prev, {
+        id: messageId,
+        text: '',
+        isBot: true,
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        duration: 0,
+        file: null,
+        sources: []
+      }]);
+
+      const startTime = Date.now();
+
+      const contextMessages = updatedHistory.slice(-15).map(msg => {
+        return msg.role === 'user' ? `User: ${msg.content}` : `Orion: ${msg.content}`;
+      }).join('\n');
+
+      const quoted = replyQuote ? replyQuote.text.replace(/<[^>]*>?/gm, '') : '';
+      const fullPrompt = replyQuote ?
+        `Fokus hanya pada kutipan berikut dan jawab berdasar itu:\n"${quoted}"\n\nPercakapan Saat Ini:\n${contextMessages}\n\nUser: "${trimmedMessage}". Respond as Orion in natural language, be concise but very helpful. For coding, provide complete solutions with proper formatting.`
+        : `Percakapan Saat Ini:\n${contextMessages}\n\nUser: "${trimmedMessage}". Respond as Orion in natural language, be concise but very helpful. For coding, provide complete solutions with proper formatting. Always maintain context.`;
+
+      const botResponse = await callGeminiAPI(fullPrompt, controller.signal);
+      const processedResponse = processSpecialChars(botResponse);
+      const duration = Date.now() - startTime;
+
+      setMessages(prev => prev.map(msg => 
+        msg.id === messageId 
+          ? { 
+              ...msg,
+              text: processedResponse, 
+              duration,
+              sources: [],
+              isCode: processedResponse.includes('```')
+            } 
+          : msg
+      ));
+
+      await typeMessage(processedResponse, (typedText) => {
+        setMessages(prev => prev.map(msg => 
+          msg.id === messageId ? { ...msg, text: typedText } : msg
+        ));
+      });
+
+      const botMessage = { role: 'assistant', content: botResponse };
+      const newChatHistory = [...updatedHistory, botMessage];
+      setChatHistory(newChatHistory);
+      
+      if (replyQuote) setReplyQuote(null);
+
+    } catch (error) {
+      console.error('Error calling Gemini API:', error);
+      
+      let errorMessage = 'Waduh, ada yang salah nih! ';
+      if (error.name === 'AbortError') {
+        errorMessage = 'Respon dihentikan oleh pengguna';
+      } else if (error.message.includes('API Key')) {
+        errorMessage = error.message;
+        setShowApiKeyInput(true);
+      } else if (error.message.includes('quota')) {
+        errorMessage = 'Quota API telah habis. Silakan periksa quota Gemini AI Anda.';
+      } else if (error.message.includes('API key not valid')) {
+        errorMessage = 'API Key tidak valid. Silakan periksa kembali API Key Anda.';
+        setShowApiKeyInput(true);
+      } else {
+        errorMessage += error.message;
+      }
+      
+      setMessages(prev => [...prev, createMessageObject(errorMessage, true)]);
+    } finally {
+      setIsBotTyping(false);
+      setFileProcessing(false);
+      setProcessingSources([]);
+      clearTimeout(timeoutId);
+      setAbortController(null);
+      currentMessageId.current = null;
+    }
+  };
+
   const copyToClipboard = (text, id) => {
     navigator.clipboard.writeText(text)
       .then(() => {
@@ -1645,31 +378,142 @@ and extremely friendly and very human little bit emoticon and get straight to th
     }
   };
 
-  const deleteMemory = (id) => {
-    const updatedMemories = memories.filter(memory => memory.id !== id);
-    setMemories(updatedMemories);
-    localStorage.setItem('orionMemories', JSON.stringify(updatedMemories));
+  const toggleDarkMode = () => setDarkMode(prev => !prev);
+
+  const createNewChatRoom = (name = 'Percakapan Baru') => {
+    if (name && typeof name === 'object' && name.currentTarget) {
+      name = 'Percakapan Baru';
+    }
+
+    const newRoom = {
+      id: Date.now().toString(),
+      name,
+      messages: [],
+      history: [],
+      createdAt: Date.now()
+    };
+    const updated = [newRoom, ...chatRooms];
+    setChatRooms(updated);
+    setCurrentRoomId(newRoom.id);
+    setMessages([]);
+    setChatHistory([]);
+    localStorage.setItem('orionChatRooms', JSON.stringify(updated));
+    localStorage.setItem('orionCurrentRoom', newRoom.id);
   };
 
-  const toggleProMode = () => {
-    const newProMode = !isProMode;
-    setIsProMode(newProMode);
-    localStorage.setItem('orionProMode', newProMode.toString());
+  const switchChatRoom = (roomId) => {
+    const room = chatRooms.find(r => r.id === roomId);
+    if (!room) return;
+    setCurrentRoomId(roomId);
+    
+    const roomMessages = localStorage.getItem(`roomMessages_${roomId}`);
+    const roomHistory = localStorage.getItem(`roomHistory_${roomId}`);
+    
+    setMessages(roomMessages ? JSON.parse(roomMessages) : []);
+    setChatHistory(roomHistory ? JSON.parse(roomHistory) : []);
+    localStorage.setItem('orionCurrentRoom', roomId);
   };
 
-  const toggleSearchMode = () => {
-    setSearchMode(prev => {
-      if (prev === false) return 'shallow';
-      if (prev === 'shallow') return 'deep';
-      return false;
-    });
+  const deleteChatRoom = (roomId) => {
+    const updatedRooms = chatRooms.filter(r => r.id !== roomId);
+    setChatRooms(updatedRooms);
+    localStorage.setItem('orionChatRooms', JSON.stringify(updatedRooms));
+    
+    // Remove room-specific data from localStorage
+    localStorage.removeItem(`roomMessages_${roomId}`);
+    localStorage.removeItem(`roomHistory_${roomId}`);
+    
+    if (currentRoomId === roomId) {
+      if (updatedRooms.length > 0) switchChatRoom(updatedRooms[0].id);
+      else createNewChatRoom();
+    }
   };
 
-  const filteredMemories = memories.filter(memory => {
-    if (memoryImportanceFilter === 'all') return true;
-    if (memoryImportanceFilter === 'important') return memory.context.importance >= 4;
-    return memory.context.importance < 4;
-  });
+  const scrollToBottomButton = () => {
+    const el = chatContainerRef.current;
+    if (!el) return;
+    el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+  };
+
+  const stopGeneration = () => {
+    try {
+      if (abortController) {
+        abortController.abort();
+        setAbortController(null);
+      }
+    } catch (e) {
+      console.warn('Error aborting controller', e);
+    }
+
+    setIsBotTyping(false);
+    setProcessingSources([]);
+
+    if (currentMessageId?.current) {
+      setMessages(prev => prev.map(m => m.id === currentMessageId.current ? { ...m, text: (m.text || '') + '\n\n[Generasi dihentikan]' } : m));
+      currentMessageId.current = null;
+    }
+  };
+
+  const regenerateMessage = async (message) => {
+    const quoted = message?.text?.replace(/<[^>]*>?/gm, '').slice(0, 2000);
+    const prompt = replyQuote ? `Fokus pada kutipan berikut dan jawab berdasarkan itu:\n"${replyQuote.text}"\n\n${quoted}` : `Tolong ulangi dan perbaiki jawaban berikut:\n${quoted}`;
+    try {
+      setIsBotTyping(true);
+      const controller = new AbortController();
+      setAbortController(controller);
+      const botResponse = await callGeminiAPI(prompt, controller.signal);
+      const processed = processSpecialChars(botResponse);
+      setMessages(prev => prev.map(m => m.id === message.id ? { ...m, text: processed } : m));
+    } catch (e) {
+      console.error('Regenerate error', e);
+    } finally {
+      setIsBotTyping(false);
+      setAbortController(null);
+    }
+  };
+
+  const saveApiKey = () => {
+    if (apiKey.trim()) {
+      localStorage.setItem('geminiApiKey', apiKey.trim());
+      setShowApiKeyInput(false);
+    }
+  };
+
+  const likeMessage = (id) => {
+    setMessages(prev => prev.map(m => m.id === id ? { ...m, liked: true, disliked: false } : m));
+  };
+
+  const dislikeMessage = (id) => {
+    setMessages(prev => prev.map(m => m.id === id ? { ...m, disliked: true, liked: false } : m));
+  };
+
+  const replyToMessage = (message) => {
+    try {
+      const plain = message?.text ? message.text.replace(/<[^>]*>?/gm, '') : '';
+      const fallback = (!plain || plain.trim().length === 0) ? (message?.file?.name ? `File: ${message.file.name}` : '<Tidak ada teks>') : null;
+      setReplyQuote({ id: message.id, text: plain, fallback });
+      setInputFocused(true);
+      requestAnimationFrame(() => textareaRef.current?.focus());
+    } catch (err) {
+      console.error('replyToMessage error', err);
+      setReplyQuote(message);
+    }
+  };
+
+  const clearReply = () => {
+    setReplyQuote(null);
+  };
+
+  const handleSelection = (e) => {
+    const selection = window.getSelection().toString();
+    if (selection && selection.length > 0) {
+      setSelectedText(selection);
+      setShowSelectionToolbar(true);
+    } else {
+      setSelectedText('');
+      setShowSelectionToolbar(false);
+    }
+  };
 
   useEffect(() => {
     const handleCopyClick = (e) => {
@@ -1684,6 +528,7 @@ and extremely friendly and very human little bit emoticon and get straight to th
     return () => document.removeEventListener('click', handleCopyClick);
   }, []);
 
+  // Theme classes
   const themeClasses = darkMode ? {
     bgPrimary: 'bg-gray-900',
     bgSecondary: 'bg-gray-800',
@@ -1696,8 +541,8 @@ and extremely friendly and very human little bit emoticon and get straight to th
     inputBg: 'bg-gray-800',
     inputBorder: 'border-gray-700',
     inputText: 'text-gray-100',
-    buttonBg: 'bg-blue-700',
-    buttonHover: 'hover:bg-blue-600',
+    buttonBg: 'bg-purple-700',
+    buttonHover: 'hover:bg-purple-600',
     buttonText: 'text-white',
     cardBg: 'bg-gray-800',
     codeBg: 'bg-gray-900',
@@ -1705,734 +550,555 @@ and extremely friendly and very human little bit emoticon and get straight to th
     codeText: 'text-gray-100',
     typingDot: 'bg-gray-400'
   } : {
-    bgPrimary: 'bg-gray-50',
+    bgPrimary: 'bg-white',
     bgSecondary: 'bg-white',
-    bgTertiary: 'bg-gray-100',
+    bgTertiary: 'bg-purple-50',
     textPrimary: 'text-gray-900',
     textSecondary: 'text-gray-600',
     textTertiary: 'text-gray-500',
-    border: 'border-gray-200',
-    hoverBg: 'hover:bg-gray-100',
+    border: 'border-gray-100',
+    hoverBg: 'hover:bg-purple-50',
     inputBg: 'bg-white',
-    inputBorder: 'border-gray-300',
+    inputBorder: 'border-purple-200',
     inputText: 'text-gray-800',
-    buttonBg: 'bg-blue-600',
-    buttonHover: 'hover:bg-blue-500',
+    buttonBg: 'bg-purple-600',
+    buttonHover: 'hover:bg-purple-500',
     buttonText: 'text-white',
     cardBg: 'bg-white',
     codeBg: 'bg-gray-50',
     codeBorder: 'border-gray-200',
     codeText: 'text-gray-800',
-    typingDot: 'bg-gray-500'
+    typingDot: 'bg-purple-500'
   };
 
   return (
-    <div className="app-wrapper">
-      <div className={`flex flex-col h-screen ${themeClasses.bgPrimary} ${themeClasses.textPrimary} relative overflow-hidden transition-colors duration-300`}>
-        {/* Header */}
-        <div className={`${themeClasses.bgSecondary} ${themeClasses.border} p-4 flex items-center justify-between sticky top-0 z-10 shadow-sm`}>
-          <div className="flex items-center space-x-3">
-            <button 
-              onClick={() => setShowChatHistory(!showChatHistory)}
-              className={`p-2 rounded-full ${themeClasses.hoverBg} transition-colors`}
-              title="Riwayat Percakapan"
-            >
-              <FiMessageSquare size={18} className={themeClasses.textSecondary} />
-            </button>
-            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-lg">
-              <span className="text-white text-sm font-bold">AI</span>
-            </div>
-            <div>
-              <h2 className="font-semibold text-base">Orion AI</h2>
-              <p className="text-xs flex items-center">
-                {isBotTyping ? (
-                  <span className="flex items-center">
-                    <span className="typing-dot"></span>
-                    <span className="typing-dot"></span>
-                    <span className="typing-dot"></span>
-                    <span className="ml-1">Sedang berpikir...</span>
-                  </span>
-                ) : (
-                  <span className="flex items-center">
-                    <span className="w-2 h-2 bg-green-500 rounded-full mr-1"></span>
-                    Online {isProMode && <span className="ml-1 text-blue-400">(Mode Pro)</span>}
-                  </span>
-                )}
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center space-x-2">
-            <button 
-              onClick={toggleDarkMode}
-              className={`p-2 rounded-full transition-colors ${themeClasses.hoverBg}`}
-              title={darkMode ? 'Ganti ke mode terang' : 'Ganti ke mode gelap'}
-            >
-              {darkMode ? <FiSun size={18} className="text-yellow-300" /> : <FiMoon size={18} />}
-            </button>
-            <button 
-              onClick={toggleProMode}
-              className={`p-2 rounded-full transition-all ${
-                isProMode ? 'bg-blue-100 text-blue-600' : themeClasses.hoverBg
-              }`}
-              title={isProMode ? 'Matikan Mode Pro' : 'Aktifkan Mode Pro'}
-            >
-              <FiZap size={18} className={isProMode ? "text-yellow-500" : ""} />
-            </button>
-            <motion.button
-              animate={controls}
-              onClick={() => setShowMemoryPanel(!showMemoryPanel)}
-              className={`p-2 rounded-full transition-colors ${
-                showMemoryPanel ? `${themeClasses.bgTertiary} ${themeClasses.textPrimary}` : themeClasses.hoverBg
-              }`}
-              title="Memori"
-            >
-              <FiCpu size={18} />
-            </motion.button>
-            <button
-              onClick={createNewChatRoom}
-              className={`p-2 rounded-full ${themeClasses.hoverBg} transition-colors`}
-              title="Percakapan Baru"
-            >
-              <FiPlus size={18} />
-            </button>
-          </div>
-        </div>
-
-        {/* Chat History Panel */}
-        {showChatHistory && (
+    <div className={`flex flex-col h-screen ${themeClasses.bgPrimary} ${themeClasses.textPrimary} relative overflow-hidden transition-colors duration-300`}>
+      {/* API Key Input Modal */}
+      <AnimatePresence>
+        {showApiKeyInput && (
           <motion.div 
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -20 }}
-            transition={{ type: "spring", damping: 25 }}
-            className={`absolute left-4 top-16 ${themeClasses.cardBg} rounded-xl shadow-xl z-20 ${themeClasses.border} w-80`}
+            initial={{ opacity: 0 }} 
+            animate={{ opacity: 1 }} 
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
           >
-            <div className={`p-3 ${themeClasses.border} flex justify-between items-center`}>
-              <h4 className="font-medium text-sm flex items-center">
-                <FiMessageSquare className="mr-2" size={14} /> Riwayat Percakapan
-              </h4>
-              <button 
-                onClick={() => setShowChatHistory(false)}
-                className={`p-1 ${themeClasses.textSecondary} hover:${themeClasses.textPrimary}`}
-              >
-                <FiX size={16} />
-              </button>
-            </div>
-            
-            <div className="max-h-96 overflow-y-auto scrollbar-thin text-sm">
-              {chatRooms.length === 0 ? (
-                <div className="p-4 text-center text-sm">
-                  Belum ada riwayat percakapan
-                </div>
-              ) : (
-                <div className={`divide-y ${themeClasses.border}`}>
-                  {chatRooms.map((room) => (
-                    <div 
-                      key={room.id} 
-                      className={`p-3 hover:${themeClasses.bgTertiary} transition-colors cursor-pointer group ${room.id === currentRoomId ? `${themeClasses.bgTertiary}` : ''}`}
-                      onClick={() => switchChatRoom(room.id)}
-                    >
-                      <div className="flex justify-between items-start">
-                        <div className="flex-1">
-                          <p className="text-xs font-medium break-words pr-2">
-                            {room.name}
-                          </p>
-                          <p className="text-xs mt-1 text-gray-500">
-                            {new Date(room.createdAt).toLocaleString('id-ID')}
-                          </p>
-                          {room.messages.length > 0 && (
-                            <p className="text-xs mt-1 truncate">
-                              {room.messages[room.messages.length - 1].text.replace(/<[^>]*>?/gm, '').substring(0, 50)}...
-                            </p>
-                          )}
-                        </div>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            deleteChatRoom(room.id);
-                          }}
-                          className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 text-xs transition-opacity"
-                        >
-                          <FiTrash2 size={14} />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </motion.div>
-        )}
-
-        {/* Chat Area */}
-        <motion.div 
-          ref={chatContainerRef}
-          className={`flex-1 overflow-y-auto p-4 space-y-4 scrollbar-thin scrollbar-thumb-gray-500 scrollbar-track-transparent 
-            ${themeClasses.bgPrimary}
-          `}
-        >
-          {messages.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full pb-16">
-              <motion.div 
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.2 }}
-                className={`${themeClasses.textPrimary} text-center`}
-              >
-                <h2 className="text-2xl font-bold mb-4">Selamat datang di Orion</h2>
-                <p className="text-sm opacity-70 mb-8">Tanyakan apa saja, saya siap membantu Anda</p>
-              </motion.div>
-              
-              {showTemplateButtons && (
-                <motion.div 
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ delay: 0.3 }}
-                  className="grid grid-cols-2 gap-4 w-full max-w-md"
-                >
-                  {[
-                    { title: "👋 Sapa", message: "Hai Orion!" },
-                    { title: "💡 Ide", message: "Berikan ide untuk..." },
-                    { title: "❓ Tanya", message: "Jelaskan tentang..." },
-                    { title: "🔧 Koding", message: "Bantu debug..." }
-                  ].map((item, index) => (
-                    <motion.button
-                      key={index}
-                      whileHover={{ y: -3, scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
-                      onClick={() => handleTemplateButtonClick(item.message)}
-                      className={`${themeClasses.cardBg} hover:${themeClasses.bgTertiary} ${themeClasses.border} rounded-xl p-4 text-sm transition-all hover:shadow-sm text-left`}
-                    >
-                      <span className="font-medium">{item.title}</span>
-                      <p className="text-xs mt-1 text-gray-500">{item.message}</p>
-                    </motion.button>
-                  ))}
-                </motion.div>
-              )}
-            </div>
-          ) : (
-            <div className="chat-messages">
-              <AnimatePresence mode="popLayout">
-                {messages.map((message) => (
-                  <motion.div key={message.id} className="message-wrapper">
-                    <ChatMessage 
-                      message={message} 
-                      isUser={!message.isBot}
-                      currentMessageId={currentMessageId.current}
-                    />
-                  </motion.div>
-                ))}
-              </AnimatePresence>
-            </div>
-          )}
-          <div ref={messagesEndRef} />
-        </motion.div>
-
-        {/* Scroll to bottom button */}
-        {showScrollButton && (
-          <motion.button
-            onClick={scrollToBottomButton}
-            className={`fixed right-6 bottom-24 w-10 h-10 rounded-full ${themeClasses.buttonBg} ${themeClasses.buttonHover} shadow-lg flex items-center justify-center z-10`}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 20 }}
-            whileHover={{ scale: 1.1 }}
-            whileTap={{ scale: 0.9 }}
-            title="Scroll ke bawah"
-          >
-            <FiChevronDown size={20} className="text-white" />
-          </motion.button>
-        )}
-
-        {/* Memory Panel */}
-        {showMemoryPanel && (
-          <motion.div 
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: 20 }}
-            transition={{ type: "spring", damping: 25 }}
-            className={`absolute right-4 top-16 ${themeClasses.cardBg} rounded-xl shadow-xl z-20 ${themeClasses.border} w-80`}
-          >
-            <div className={`p-3 ${themeClasses.border} flex justify-between items-center`}>
-              <h4 className="font-medium text-sm flex items-center">
-                <FiCpu className="mr-2" size={16} /> Konteks Memori
-              </h4>
-              <div className="flex items-center space-x-2">
-                <div className="relative">
-                  <select
-                    value={memoryImportanceFilter}
-                    onChange={(e) => setMemoryImportanceFilter(e.target.value)}
-                    className={`text-xs ${themeClasses.bgTertiary} hover:${themeClasses.bgSecondary} px-2 py-1 rounded-lg transition-colors appearance-none pr-6 ${themeClasses.textPrimary}`}
-                  >
-                    <option value="all">Semua Memori</option>
-                    <option value="important">Penting</option>
-                    <option value="normal">Normal</option>
-                  </select>
-                  <FiChevronDown size={12} className="absolute right-2 top-2 pointer-events-none" />
-                </div>
-                <button
-                  onClick={autoSaveToMemory}
-                  disabled={messages.length === 0}
-                  className={`text-xs ${themeClasses.bgTertiary} hover:${themeClasses.bgSecondary} px-2 py-1 rounded-lg transition-colors disabled:opacity-50`}
-                >
-                  Ingat
-                </button>
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className={`${themeClasses.cardBg} rounded-xl p-6 max-w-md w-full mx-4 ${themeClasses.border}`}
+            >
+              <div className="flex items-center justify-between mb-4">
+                <h3 className={`text-lg font-semibold ${themeClasses.textPrimary}`}>Masukkan API Key Gemini</h3>
                 <button 
-                  onClick={() => setShowMemoryPanel(false)}
-                  className={`p-1 ${themeClasses.textSecondary} hover:${themeClasses.textPrimary}`}
+                  onClick={() => setShowApiKeyInput(false)}
+                  className={`p-1 rounded-md ${themeClasses.hoverBg}`}
                 >
-                  <FiX size={16} />
+                  <FiX size={20} />
                 </button>
               </div>
-            </div>
-            
-            <div className="max-h-72 overflow-y-auto scrollbar-thin text-sm">
-              {filteredMemories.length === 0 ? (
-                <div className="p-4 text-center text-sm">
-                  Belum ada memori. Konteks penting akan muncul di sini.
+              
+              <p className={`text-sm mb-4 ${themeClasses.textSecondary}`}>
+                Anda memerlukan API Key dari Google AI Studio untuk menggunakan chatbot ini.
+              </p>
+              
+              <div className="space-y-3">
+                <input
+                  type="password"
+                  value={apiKey}
+                  onChange={(e) => setApiKey(e.target.value)}
+                  placeholder="Masukkan API Key Gemini Anda..."
+                  className={`w-full px-3 py-2 rounded-md border ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.inputText}`}
+                />
+                
+                <div className="flex space-x-2">
+                  <button
+                    onClick={saveApiKey}
+                    className={`flex-1 py-2 px-4 rounded-md ${themeClasses.buttonBg} ${themeClasses.buttonText}`}
+                  >
+                    Simpan
+                  </button>
+                  <a
+                    href="https://aistudio.google.com/apikey"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={`flex-1 py-2 px-4 rounded-md border text-center ${themeClasses.border} ${themeClasses.textPrimary} ${themeClasses.hoverBg}`}
+                  >
+                    Dapatkan API Key
+                  </a>
                 </div>
-              ) : (
-                <div className={`divide-y ${themeClasses.border}`}>
-                  {filteredMemories.map((memory) => (
-                    <div key={memory.id} className={`p-3 hover:${themeClasses.bgTertiary} transition-colors group`}>
-                      <div className="flex justify-between items-start">
-                        <div className="flex-1">
-                          <div className="flex items-start">
-                            <p className="text-xs break-words pr-2">{memory.summary}</p>
-                            {memory.context.importance >= 4 && (
-                              <FiStar className="text-yellow-400 flex-shrink-0 mt-0.5" size={12} />
-                            )}
-                          </div>
-                          <p className="text-xs mt-1 text-gray-500">{memory.context.date}</p>
-                          {memory.context.tags.length > 0 && (
-                            <div className="flex flex-wrap gap-1 mt-1">
-                              {memory.context.tags.map(tag => (
-                                <span key={tag} className="text-xs bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded-full">
-                                  {tag}
-                                </span>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                        <div className="flex space-x-1">
-                          <button
-                            onClick={() => setShowMemoryDetails(showMemoryDetails === memory.id ? null : memory.id)}
-                            className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-blue-500 text-xs transition-opacity"
-                            title="Detail"
-                          >
-                            <FiInfo size={14} />
-                          </button>
-                          <button
-                            onClick={() => deleteMemory(memory.id)}
-                            className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 text-xs transition-opacity"
-                            title="Hapus"
-                          >
-                            <FiTrash2 size={14} />
-                          </button>
-                        </div>
-                      </div>
-                      
-                      {showMemoryDetails === memory.id && (
-                        <motion.div
-                          initial={{ opacity: 0, height: 0 }}
-                          animate={{ opacity: 1, height: 'auto' }}
-                          exit={{ opacity: 0, height: 0 }}
-                          transition={{ duration: 0.2 }}
-                          className={`mt-2 pt-2 border-t ${themeClasses.border}`}
-                        >
-                          <div className="flex items-center text-xs mb-1">
-                            <span className="font-medium mr-2">Detail:</span>
-                            <span className="flex items-center">
-                              <span className="w-2 h-2 rounded-full bg-blue-500 mr-1"></span>
-                              {memory.context.language === 'indonesia' ? 'Bahasa Indonesia' : 'English'}
-                            </span>
-                            <span className="mx-2">•</span>
-                            <span className="flex items-center">
-                              <FiStar className="mr-1" size={12} />
-                              Penting: {memory.context.importance}/5
-                            </span>
-                          </div>
-                          <div className="text-xs max-h-40 overflow-y-auto bg-gray-900 bg-opacity-20 rounded p-2">
-                            {memory.messages.slice(0, 4).map((msg, idx) => (
-                              <p key={idx} className="mb-1">
-                                <span className="font-medium">{msg.isBot ? 'Orion' : 'Anda'}:</span> {msg.text.replace(/<[^>]*>?/gm, '').substring(0, 100)}...
-                              </p>
-                            ))}
-                            {memory.messages.length > 4 && (
-                              <p className="text-xs text-gray-500">+ {memory.messages.length - 4} pesan lainnya</p>
-                            )}
-                          </div>
-                        </motion.div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+                
+                <p className={`text-xs ${themeClasses.textTertiary}`}>
+                  API Key akan disimpan secara lokal di browser Anda.
+                </p>
+              </div>
+            </motion.div>
           </motion.div>
         )}
+      </AnimatePresence>
 
-        {/* Bottom Input Container */}
-        <div className={`${themeClasses.border} ${themeClasses.bgSecondary} pt-3 pb-4 px-4`}>
-          {/* Typing Animation */}
-          <AnimatePresence>
-            {showTypingAnimation && (
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20 }}
-                className="mb-4"
-              >
-                <TypingAnimation />
-              </motion.div>
+      {/* Header */}
+      <div className={`${themeClasses.bgSecondary} ${themeClasses.border} p-4 flex items-center justify-between sticky top-0 z-10 shadow-sm relative`}>
+        <div />
+        <div className={`absolute right-4 top-3 flex items-center space-x-2 rounded-full p-1 shadow-lg backdrop-blur-sm ${themeClasses.cardBg} ${themeClasses.border}`}>
+          <button 
+            onClick={toggleDarkMode}
+            className={`p-2 rounded-full transition-colors ${themeClasses.hoverBg}`}
+            title={darkMode ? 'Ganti ke mode terang' : 'Ganti ke mode gelap'}
+          >
+            {darkMode ? <FiSun size={16} className="text-yellow-300" /> : <FiMoon size={16} className={themeClasses.textPrimary} />}
+          </button>
+
+          <button
+            onClick={() => setShowChatHistory(!showChatHistory)}
+            className={`p-2 rounded-full transition-colors ${themeClasses.hoverBg}`}
+            title="Riwayat Percakapan"
+          >
+            <FiMessageSquare size={16} className={themeClasses.textPrimary} />
+          </button>
+
+          <button
+            onClick={createNewChatRoom}
+            className={`p-2 rounded-full transition-colors ${themeClasses.hoverBg}`}
+            title="Percakapan Baru"
+          >
+            <FiPlus size={16} className={themeClasses.textPrimary} />
+          </button>
+
+          <button
+            onClick={() => setShowApiKeyInput(true)}
+            className={`p-2 rounded-full transition-colors ${themeClasses.hoverBg}`}
+            title="Kelola API Key"
+          >
+            <FiSettings size={16} className={themeClasses.textPrimary} />
+          </button>
+        </div>
+      </div>
+
+      {/* Chat History Panel */}
+      {showChatHistory && (
+        <motion.div
+          initial={{ opacity: 0, x: -12 }}
+          animate={{ opacity: 1, x: 0 }}
+          exit={{ opacity: 0, x: -12 }}
+          transition={{ type: 'spring', damping: 20 }}
+          className={`absolute left-6 top-16 ${themeClasses.cardBg} rounded-2xl shadow-2xl z-30 ${themeClasses.border} w-96 max-w-[90%]`}
+        >
+          <div className={`flex items-center justify-between p-4 border-b ${themeClasses.border}`}>
+            <div className="flex items-center space-x-3">
+              <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-purple-500 to-purple-700 flex items-center justify-center text-white shadow">📁</div>
+              <div>
+                <h4 className={`text-sm font-semibold ${themeClasses.textPrimary}`}>Riwayat Percakapan</h4>
+                <p className={`text-xs ${themeClasses.textTertiary}`}>Pilih percakapan untuk melanjutkan</p>
+              </div>
+            </div>
+            <div className="flex items-center space-x-2">
+              <button onClick={() => createNewChatRoom()} className={`px-3 py-1 rounded-md text-sm ${themeClasses.buttonBg} ${themeClasses.buttonText}`}>Baru</button>
+              <button onClick={() => setShowChatHistory(false)} className={`p-2 rounded-full ${themeClasses.hoverBg}`} title="Tutup">
+                <FiX size={16} className={themeClasses.textPrimary} />
+              </button>
+            </div>
+          </div>
+
+          <div className={`p-3 ${themeClasses.border} flex items-center space-x-2`}> 
+            <input
+              value={roomQuery}
+              onChange={(e) => setRoomQuery(e.target.value)}
+              placeholder="Cari percakapan..."
+              className={`w-full px-3 py-2 rounded-md outline-none ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.inputText}`}
+            />
+            <button className={`p-2 rounded-md ${themeClasses.hoverBg}`} title="Cari"><FiSearch size={16} /></button>
+          </div>
+
+          <div className="max-h-96 overflow-y-auto scrollbar-thin text-sm p-2 space-y-2">
+            {chatRooms.filter(r => r.name.toLowerCase().includes(roomQuery.toLowerCase())).length === 0 ? (
+              <div className={`p-6 text-center rounded-lg ${themeClasses.bgTertiary} ${themeClasses.textTertiary}`}>Belum ada riwayat percakapan</div>
+            ) : (
+              chatRooms
+                .filter(r => r.name.toLowerCase().includes(roomQuery.toLowerCase()))
+                .map((room) => (
+                  <div
+                    key={room.id}
+                    onClick={() => { switchChatRoom(room.id); setShowChatHistory(false); }}
+                    className={`group flex items-start space-x-3 p-3 rounded-lg cursor-pointer transition-all ${room.id === currentRoomId ? `${themeClasses.bgTertiary} ${themeClasses.border}` : `${themeClasses.hoverBg}`}`}
+                  >
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${themeClasses.cardBg} ${themeClasses.border}`}>
+                      <span className="text-sm font-medium">{room.name.charAt(0) || 'O'}</span>
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex items-center justify-between">
+                        <p className={`font-medium text-sm ${themeClasses.textPrimary}`}>{room.name}</p>
+                        <p className={`text-xs ${themeClasses.textTertiary}`}>{new Date(room.createdAt).toLocaleDateString('id-ID')}</p>
+                      </div>
+                      <p className={`text-xs mt-1 truncate ${themeClasses.textTertiary}`}>
+                        {(() => {
+                          const roomMessages = localStorage.getItem(`roomMessages_${room.id}`);
+                          const messages = roomMessages ? JSON.parse(roomMessages) : [];
+                          return messages.length > 0 ? 
+                            messages[messages.length - 1].text.replace(/<[^>]*>?/gm, '').substring(0, 80) : 
+                            'Belum ada pesan';
+                        })()}
+                      </p>
+                    </div>
+                    <div>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); deleteChatRoom(room.id); }}
+                        className="opacity-0 group-hover:opacity-100 text-sm text-red-500 p-1 rounded"
+                        title="Hapus percakapan"
+                      >
+                        <FiTrash2 size={16} />
+                      </button>
+                    </div>
+                  </div>
+                ))
             )}
+          </div>
+        </motion.div>
+      )}
+
+      {/* Chat Area */}
+      <div 
+        ref={chatContainerRef}
+        className={`flex-1 overflow-y-auto p-4 space-y-4 scrollbar-thin scrollbar-thumb-gray-500 scrollbar-track-transparent ${themeClasses.bgPrimary}`}
+      >
+        {messages.length === 0 && (
+          <div className="flex flex-col items-center justify-center h-full pb-16">
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ duration: 0.4, type: 'spring' }}
+              className="w-24 h-24 mb-6 rounded-full bg-gradient-to-br from-purple-500 to-purple-700 flex items-center justify-center shadow-2xl"
+            >
+              <span className="text-4xl md:text-5xl text-white font-extrabold">AI</span>
+            </motion.div>
+            <motion.h3 
+              initial={{ y: 10, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              transition={{ delay: 0.1, duration: 0.3 }}
+              className="text-2xl font-semibold text-center mb-2"
+            >
+              Halo, saya Orion 😊!
+            </motion.h3>
+            <motion.p 
+              initial={{ y: 10, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              transition={{ delay: 0.2, duration: 0.3 }}
+              className="text-center mb-8 max-w-md text-sm"
+            >
+              Asisten AI Anda yang siap membantu. Tanyakan apa saja!
+            </motion.p>
+          </div>
+        )}
+
+        <div className="space-y-4">
+          <AnimatePresence>
+            {messages.map((message) => (
+              <motion.div
+                key={message.id}
+                initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: -10, scale: 0.95 }}
+                transition={{ 
+                  duration: 0.2, 
+                  ease: "easeOut",
+                  type: "spring",
+                  stiffness: 500,
+                  damping: 30
+                }}
+                className={`flex ${message.isBot ? 'justify-start' : 'justify-end'}`}
+              >
+                <motion.div
+                  whileHover={{ scale: 1.01 }}
+                  className={`${message.isBot ? `w-full max-w-full ${themeClasses.cardBg} ${themeClasses.border}` : 'max-w-[90%] md:max-w-[80%] bg-gradient-to-br from-purple-600 to-purple-500 text-white'} rounded-2xl p-4 shadow-xs`}
+                >
+                  {message.file ? (
+                    <div>
+                      <p className={`text-xs mb-1 ${message.isBot ? themeClasses.textTertiary : 'text-blue-100'}`}>File: {message.file.name}</p>
+                      {message.file.type.startsWith('image/') && (
+                        <img 
+                          src={URL.createObjectURL(message.file)} 
+                          alt="Uploaded" 
+                          className="mt-1 max-w-full h-auto rounded-lg border border-gray-200 shadow-sm" 
+                        />
+                      )}
+                    </div>
+                  ) : (
+                    <>
+                      {message.quoted && (
+                        <div className={`mb-2 p-2 rounded-md text-xs truncate ${themeClasses.bgTertiary} ${themeClasses.textTertiary}`}>{message.quoted}</div>
+                      )}
+                    <div 
+                      onMouseUp={handleSelection}
+                      className={`${message.isBot ? `text-xl md:text-2xl ${themeClasses.textPrimary}` : 'text-white text-sm'}`}
+                      dangerouslySetInnerHTML={{ __html: message.text }} 
+                    />
+                    </>
+                  )}
+                  
+                  <div className="flex items-center justify-between mt-2">
+                    <span className={`text-xs ${message.isBot ? themeClasses.textTertiary : 'text-blue-100'}`}>
+                      {message.time}
+                      {message.isBot && message.duration > 0 && (
+                        <span> • {(message.duration / 1000).toFixed(1)}s</span>
+                      )}
+                    </span>
+                    
+                    <div className="flex items-center space-x-2">
+                      {message.isBot && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); copyToClipboard(message.text.replace(/<[^>]*>?/gm, ''), message.id); }}
+                          className="text-xs opacity-60 hover:opacity-100 transition-opacity"
+                          title="Salin ke clipboard"
+                        >
+                          {copiedMessageId === message.id ? (
+                            <FiCheck size={16} className="text-green-500" />
+                          ) : (
+                            <FiCopy size={16} />
+                          )}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {message.isBot && (
+                    <div className="mt-3 flex items-center space-x-3">
+                      <button onClick={(e) => { e.stopPropagation(); regenerateMessage(message); }} title="Regenerate" className="px-2 py-1 rounded-md text-sm bg-purple-50 hover:bg-purple-100">
+                        <FiRefreshCw size={16} className="inline-block mr-1" /> Regenerate
+                      </button>
+                      <button onClick={(e) => { e.stopPropagation(); likeMessage(message.id); }} title="Like" className={`px-2 py-1 rounded-md text-sm ${message.liked ? 'bg-purple-600 text-white' : 'bg-purple-50 hover:bg-purple-100'}`}>
+                        <FiThumbsUp size={16} className="inline-block mr-1" /> Like
+                      </button>
+                      <button onClick={(e) => { e.stopPropagation(); dislikeMessage(message.id); }} title="Dislike" className={`px-2 py-1 rounded-md text-sm ${message.disliked ? 'bg-red-500 text-white' : 'bg-purple-50 hover:bg-purple-100'}`}>
+                        <FiThumbsDown size={16} className="inline-block mr-1" /> Dislike
+                      </button>
+                      <button onClick={(e) => { e.stopPropagation(); replyToMessage(message); }} title="Reply to this" className="px-2 py-1 rounded-md text-sm bg-purple-50 hover:bg-purple-100">
+                        <FiCornerUpLeft size={16} className="inline-block mr-1" /> Reply
+                      </button>
+                    </div>
+                  )}
+                </motion.div>
+              </motion.div>
+            ))}
           </AnimatePresence>
           
-          {/* File Preview */}
-          <AnimatePresence>
-            {pendingFiles.length > 0 && (
-              <motion.div
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: 'auto', opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                transition={{ duration: 0.3, ease: 'easeInOut' }}
-                className={`flex items-center space-x-3 p-3 ${themeClasses.border} overflow-x-auto scrollbar-thin ${themeClasses.bgTertiary} rounded-t-lg`}
-              >
-                {pendingFiles.map((file, index) => (
-                  <motion.div
-                    key={index}
-                    initial={{ scale: 0.8, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    transition={{ delay: index * 0.05, type: "spring", stiffness: 300 }}
-                    className="relative flex-shrink-0"
-                  >
-                    <div className={`w-16 h-16 flex items-center justify-center ${themeClasses.cardBg} rounded-lg ${themeClasses.border} overflow-hidden shadow-md`}>
-                      {file.type.startsWith('image/') ? (
-                        <img
-                          src={URL.createObjectURL(file)}
-                          alt="Preview"
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <div className="p-1 text-center">
-                          <FiFile size={18} className="mx-auto" />
-                          <p className="text-xs mt-0.5 truncate w-14">{file.name.split('.')[0]}</p>
-                        </div>
-                      )}
-                    </div>
-                    <motion.button
-                      onClick={() => {
-                        const newFiles = [...pendingFiles];
-                        newFiles.splice(index, 1);
-                        setPendingFiles(newFiles);
-                      }}
-                      className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-0.5 hover:bg-red-600 transition-all shadow"
-                      whileHover={{ scale: 1.1 }}
-                      whileTap={{ scale: 0.9 }}
-                    >
-                      <FiX size={10} />
-                    </motion.button>
-                  </motion.div>
-                ))}
-              </motion.div>
-            )}
-          </AnimatePresence>
+          <div ref={messagesEndRef} />
+        </div>
+      </div>
 
-          {/* Search Mode Indicator */}
-          {searchMode && (
+      {/* Scroll to bottom button */}
+      {showScrollButton && (
+        <motion.button
+          onClick={scrollToBottomButton}
+          className={`fixed right-6 bottom-24 w-10 h-10 rounded-full ${themeClasses.buttonBg} ${themeClasses.buttonHover} shadow-lg flex items-center justify-center z-10`}
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: 20 }}
+          whileHover={{ scale: 1.1 }}
+          whileTap={{ scale: 0.9 }}
+          title="Scroll ke bawah"
+        >
+          <FiChevronDown size={20} className="text-white" />
+        </motion.button>
+      )}
+
+      {/* Bottom Input Container */}
+      <div className={`${themeClasses.border} ${themeClasses.bgSecondary} pt-3 pb-4 px-4`}>
+        
+        {/* File Preview */}
+        <AnimatePresence>
+          {pendingFiles.length > 0 && (
             <motion.div
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.3 }}
-              className={`text-xs px-3 py-1.5 mb-2 rounded-full inline-flex items-center ${searchMode === 'deep' ? 'bg-purple-100 text-purple-800' : 'bg-blue-100 text-blue-800'}`}
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.3, ease: 'easeInOut' }}
+              className={`flex items-center space-x-3 p-3 ${themeClasses.border} overflow-x-auto scrollbar-thin ${themeClasses.bgTertiary} rounded-t-lg`}
             >
-              <FiGlobe size={12} className="mr-1" />
-              {searchMode === 'deep' ? 'Pencarian Web Mendalam' : 'Pencarian Web'} aktif
-              <button 
-                onClick={() => setSearchMode(false)}
-                className="ml-2 text-current hover:text-red-500"
-              >
-                <FiX size={12} />
-              </button>
+              {pendingFiles.map((file, index) => (
+                <motion.div
+                  key={index}
+                  initial={{ scale: 0.8, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  transition={{ delay: index * 0.05, type: "spring", stiffness: 300 }}
+                  className="relative flex-shrink-0"
+                >
+                  <div className={`w-16 h-16 flex items-center justify-center ${themeClasses.cardBg} rounded-lg ${themeClasses.border} overflow-hidden shadow-md`}>
+                    {file.type.startsWith('image/') ? (
+                      <img
+                        src={URL.createObjectURL(file)}
+                        alt="Preview"
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="p-1 text-center">
+                        <FiFile size={18} className="mx-auto" />
+                        <p className="text-xs mt-0.5 truncate w-14">{file.name.split('.')[0]}</p>
+                      </div>
+                    )}
+                  </div>
+                  <motion.button
+                    onClick={() => {
+                      const newFiles = [...pendingFiles];
+                      newFiles.splice(index, 1);
+                      setPendingFiles(newFiles);
+                    }}
+                    className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-0.5 hover:bg-red-600 transition-all shadow"
+                    whileHover={{ scale: 1.1 }}
+                    whileTap={{ scale: 0.9 }}
+                  >
+                    <FiX size={10} />
+                  </motion.button>
+                </motion.div>
+              ))}
             </motion.div>
           )}
+        </AnimatePresence>
 
-          {/* Main Input Area */}
-          <div className="flex items-center space-x-2 mb-2">
-            <div className="relative">
-              {isListening && (
-                <div className="absolute -top-6 left-1/2 transform -translate-x-1/2 text-xs text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-800 px-2 py-0.5 rounded-full shadow-sm">
-                  Mendengarkan...
-                </div>
-              )}
-              <motion.button
-                whileHover={{ scale: 1.1 }}
-                whileTap={{ scale: 0.9 }}
-                onClick={() => {
-                  if (isListening) {
-                    stopVoiceRecognition();
-                  } else {
-                    startVoiceRecognition();
-                  }
-                }}
-                className={`p-2 rounded-full transition-all ${
-                  isListening
-                    ? 'bg-red-500 dark:bg-red-600 text-white'
-                    : `${themeClasses.bgTertiary} ${themeClasses.textPrimary}`
-                }`}
-                title={isListening ? 'Hentikan input suara' : 'Mulai input suara'}
-              >
-                <FiMic size={18} />
-              </motion.button>
-            </div>
-            <motion.button
-              whileHover={{ scale: 1.1 }}
-              whileTap={{ scale: 0.9 }}
-              onClick={() => setTtsEnabled(!ttsEnabled)}
-              className={`p-2 rounded-full transition-all ${
-                ttsEnabled 
-                  ? 'bg-blue-500 dark:bg-blue-600 text-white' 
-                  : `${themeClasses.bgTertiary} ${themeClasses.textPrimary}`
-              }`}
-              title={ttsEnabled ? 'Matikan suara' : 'Aktifkan suara'}
-            >
-              {isSpeaking ? <FiVolume2 size={18} /> : <FiVolumeX size={18} />}
-            </motion.button>
-            <motion.button
-              whileHover={{ scale: 1.1 }}
-              whileTap={{ scale: 0.9 }}
-              onClick={() => setReasonerEnabled(!reasonerEnabled)}
-              className={`p-2 rounded-full transition-all ${
-                reasonerEnabled 
-                  ? 'bg-purple-500 dark:bg-purple-600 text-white' 
-                  : `${themeClasses.bgTertiary} ${themeClasses.textPrimary}`
-              }`}
-              title={reasonerEnabled ? 'Matikan analisis' : 'Aktifkan analisis'}
-            >
-              <RiBrainLine size={18} />
-            </motion.button>
-            <motion.button
-              whileHover={{ scale: 1.1 }}
-              whileTap={{ scale: 0.9 }}
-              onClick={() => setHideSuggestions(!hideSuggestions)}
-              className={`p-2 rounded-full transition-all ${
-                !hideSuggestions 
-                  ? 'bg-blue-500 dark:bg-blue-600 text-white' 
-                  : `${themeClasses.bgTertiary} ${themeClasses.textPrimary}`
-              }`}
-              title={hideSuggestions ? 'Tampilkan saran' : 'Sembunyikan saran'}
-            >
-              {hideSuggestions ? <FiChevronDown size={18} /> : <FiChevronUp size={18} />}
-            </motion.button>
-          </div>
-
-          {/* Suggested Prompts */}
-          {messages.length > 0 && messages[messages.length - 1].suggestions && !hideSuggestions && (
-            <div className="relative">
-              <div className="flex space-x-2 mb-3 overflow-x-auto scrollbar-thin pb-2 -mx-4 px-4">
-                {messages[messages.length - 1].suggestions.slice(0, 5).map((suggestion, index) => {
-                  const shortSuggestion = suggestion.split(' ').slice(0, 3).join(' ') + (suggestion.split(' ').length > 3 ? '...' : '');
-                  return (
-                    <motion.button
-                      key={index}
-                      onClick={() => handleSendMessage(suggestion)}
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                      className={`${themeClasses.cardBg} ${themeClasses.border} px-3 py-1.5 rounded-full text-sm hover:bg-blue-50 dark:hover:bg-gray-700 hover:text-blue-600 dark:hover:text-blue-400 transition-all duration-200 shadow-sm flex-shrink-0 ${themeClasses.textPrimary}`}
-                      title={suggestion}
-                    >
-                      {shortSuggestion}
-                    </motion.button>
-                  );
-                })}
-                <motion.button
-                  onClick={() => setHideSuggestions(true)}
-                  className={`flex-shrink-0 w-8 h-8 rounded-full ${themeClasses.bgTertiary} flex items-center justify-center hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors ${themeClasses.textPrimary}`}
-                  whileHover={{ scale: 1.1 }}
-                  whileTap={{ scale: 0.9 }}
-                >
-                  <FiChevronDown size={18} />
-                </motion.button>
+        {/* Modern Input Area */}
+        <div className="relative mt-2">
+          {replyQuote && (
+            <div className={`mb-2 p-2 rounded-lg border flex items-start justify-between ${themeClasses.bgTertiary} ${themeClasses.border}`}>
+              <div className="flex-1 text-sm">
+                <div className={`text-xs ${themeClasses.textTertiary}`}>Membalas:</div>
+                <div className={`text-sm ${themeClasses.textPrimary} truncate`}>{(replyQuote.text && replyQuote.text.trim().length > 0) ? replyQuote.text : (replyQuote.fallback || '<Tidak ada teks>')}</div>
               </div>
+              <button onClick={clearReply} className={`ml-3 p-1 ${themeClasses.textTertiary} hover:${themeClasses.textPrimary}`}>✕</button>
             </div>
           )}
-
-          <motion.div 
-            className="relative mt-1"
-            initial={false}
-            animate={{ 
-              height: textareaRef.current ? Math.min(textareaRef.current.scrollHeight, 120) : 52,
-              scale: isGenerating ? 0.98 : 1
-            }}
-            transition={{ type: "spring", stiffness: 500, damping: 30 }}
-          >
-            <motion.div
-              className="relative w-full"
-              whileHover={{ scale: 1.01 }}
-              whileTap={{ scale: 0.99 }}
+          <div className={`modern-input ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardBg} rounded-2xl p-3 pr-4 shadow-lg transition-all duration-300 flex items-center space-x-3 ${inputFocused || inputMessage ? 'focused' : ''}`}>
+            <motion.button
+              onClick={() => setShowFileOptions(!showFileOptions)}
+              className={`p-2 rounded-md transition-colors ${showFileOptions ? themeClasses.bgTertiary : themeClasses.hoverBg}`}
+              title="Lampirkan file"
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.96 }}
             >
+              <FiPlus size={16} className={themeClasses.textPrimary} />
+            </motion.button>
+
+            <div className="flex-1 relative">
+              <label className={`floating-label ${inputFocused || inputMessage ? 'active' : ''} ${themeClasses.textSecondary}`}>Tulis pesan...</label>
               <textarea
                 ref={textareaRef}
                 value={inputMessage}
                 onChange={(e) => {
                   setInputMessage(e.target.value);
-                  e.target.style.height = "auto";
-                  e.target.style.height = `${Math.min(e.target.scrollHeight, 120)}px`;
+                  e.target.style.height = 'auto';
+                  e.target.style.height = `${Math.min(e.target.scrollHeight, 220)}px`;
                 }}
+                onFocus={() => setInputFocused(true)}
+                onBlur={() => setInputFocused(false)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault();
                     handleSendMessage(inputMessage, pendingFiles);
                   }
                 }}
-                placeholder="Ketik pesan Anda..."
-                className={`w-full rounded-xl px-4 py-3 pr-14 
-                  focus:outline-none resize-none overflow-hidden
-                  transition-all duration-300 ease-in-out
-                  shadow-lg dark:shadow-blue-500/20
-                  ${themeClasses.inputBg} ${themeClasses.inputBorder}
-                  border-blue-100 dark:border-blue-500/20
-                  focus:border-blue-500 dark:focus:border-blue-400
-                  placeholder-gray-400 dark:placeholder-gray-500
-                  ${isGenerating ? 'opacity-50' : 'opacity-100'}
-                  ${themeClasses.inputText}
-                `}
                 rows={1}
-                style={{ 
-                  minHeight: '52px',
-                  maxHeight: '120px',
-                }}
+                className={`w-full bg-transparent resize-none outline-none text-base md:text-lg leading-6 md:leading-7 ${themeClasses.inputText}`}
+                style={{ minHeight: 48 }}
               />
-              <motion.div
-                className="absolute inset-0 rounded-xl pointer-events-none"
-                animate={{ 
-                  boxShadow: inputMessage ? '0 0 20px rgba(59,130,246,0.2)' : 'none',
-                  borderColor: inputMessage ? 'rgba(59,130,246,0.5)' : 'transparent'
-                }}
-                transition={{ duration: 0.3 }}
-              />
+            </div>
 
-              <div className="absolute right-3 bottom-3 flex items-center space-x-1.5">
-                {inputMessage && (
-                  <motion.button
-                    onClick={() => setInputMessage('')}
-                    className={`p-1.5 rounded-full ${themeClasses.hoverBg} transition-all`}
-                    whileHover={{ scale: 1.2 }}
-                    whileTap={{ scale: 0.9 }}
-                  >
-                    <FiX size={16} />
-                  </motion.button>
-                )}
-
-                <motion.button
-                  onClick={toggleSearchMode}
-                  className={`p-1.5 rounded-full transition-all ${
-                    searchMode === 'deep' ? 'bg-purple-500 text-white' : 
-                    searchMode === 'shallow' ? 'bg-blue-500 text-white' : 
-                    themeClasses.hoverBg
-                  }`}
-                  title={searchMode ? `Mode pencarian: ${searchMode}` : 'Aktifkan pencarian web'}
-                  whileHover={{ scale: 1.2 }}
-                  whileTap={{ scale: 0.9 }}
-                >
-                  <FiGlobe size={16} />
-                </motion.button>
-
-                {isBotTyping ? (
-                  <motion.button
-                    onClick={stopGeneration}
-                    className="p-1.5 rounded-full bg-red-500 hover:bg-red-600 text-white transition-all shadow"
-                    title="Hentikan generasi"
-                    whileHover={{ scale: 1.2 }}
-                    whileTap={{ scale: 0.9 }}
-                  >
-                    <FiStopCircle size={16} />
-                  </motion.button>
-                ) : (
-                  <>
-                    <motion.button
-                      onClick={() => setShowFileOptions(!showFileOptions)}
-                      className={`p-1.5 rounded-full transition-all ${showFileOptions ? `${themeClasses.bgTertiary}` : themeClasses.hoverBg}`}
-                      title="Lampirkan file"
-                      whileHover={{ scale: 1.2 }}
-                      whileTap={{ scale: 0.9 }}
-                    >
-                      <FiPlus size={16} />
-                    </motion.button>
-
-                    <motion.button
-                      onClick={() => handleSendMessage(inputMessage, pendingFiles)}
-                      disabled={(!inputMessage.trim() && pendingFiles.length === 0) || isBotTyping}
-                      className={`p-2 rounded-full transition-all duration-300 ${
-                        inputMessage.trim() || pendingFiles.length > 0
-                          ? 'bg-gradient-to-br from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white shadow-md'
-                          : 'text-gray-400 hover:text-gray-500 hover:bg-gray-100'
-                      }`}
-                      whileHover={{
-                        scale: (inputMessage.trim() || pendingFiles.length > 0) ? 1.15 : 1,
-                        rotate: (inputMessage.trim() || pendingFiles.length > 0) ? 6 : 0
-                      }}
-                      whileTap={{ scale: 0.9 }}
-                      title="Kirim pesan"
-                    >
-                      <RiSendPlaneFill size={18} />
-                    </motion.button>
-                  </>
-                )}
-              </div>
-            </motion.div>
-
-            {/* File Options */}
-            <AnimatePresence>
-              {showFileOptions && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  exit={{ opacity: 0, height: 0 }}
-                  transition={{ duration: 0.25 }}
-                  className="flex space-x-3 pt-3"
-                >
-                  <motion.label
-                    className={`cursor-pointer p-2 rounded-lg transition-all ${themeClasses.hoverBg}`}
-                    whileHover={{ scale: 1.1 }}
-                    whileTap={{ scale: 0.95 }}
-                    title="Unggah gambar"
-                  >
-                    <input
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      onChange={handleFileUpload}
-                      multiple
-                    />
-                    <FiImage size={18} />
-                  </motion.label>
-                  <motion.label
-                    className={`cursor-pointer p-2 rounded-lg transition-all ${themeClasses.hoverBg}`}
-                    whileHover={{ scale: 1.1 }}
-                    whileTap={{ scale: 0.95 }}
-                    title="Unggah file"
-                  >
-                    <input
-                      type="file"
-                      accept=".pdf,.txt,.doc,.docx,.csv"
-                      className="hidden"
-                      onChange={handleFileUpload}
-                      multiple
-                    />
-                    <FiFile size={18} />
-                  </motion.label>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </motion.div>
+            {isBotTyping ? (
+              <motion.button
+                onClick={stopGeneration}
+                className={`w-12 h-12 flex items-center justify-center rounded-md ${darkMode ? 'bg-red-600' : 'bg-red-500'} ${themeClasses.buttonText} shadow-xl stop-btn`}
+                initial={{ scale: 1 }}
+                animate={{ scale: [1, 1.06, 1] }}
+                transition={{ duration: 1.2, repeat: Infinity, ease: 'easeInOut' }}
+                whileHover={{ scale: 1.04 }}
+                whileTap={{ scale: 0.98 }}
+                title="Hentikan generasi"
+              >
+                <FiStopCircle size={18} />
+              </motion.button>
+            ) : (
+              <motion.button
+                onClick={() => handleSendMessage(inputMessage, pendingFiles)}
+                disabled={(!inputMessage.trim() && pendingFiles.length === 0) || isBotTyping}
+                className={`w-12 h-12 flex items-center justify-center rounded-md transition-all duration-200 ${inputMessage.trim() || pendingFiles.length > 0 ? `${themeClasses.buttonBg} ${themeClasses.buttonText}` : 'opacity-40 pointer-events-none'}`}
+                whileHover={{ scale: inputMessage.trim() || pendingFiles.length > 0 ? 1.04 : 1 }}
+                whileTap={{ scale: 0.98 }}
+                title="Kirim pesan"
+              >
+                <RiSendPlaneFill size={18} />
+              </motion.button>
+            )}
+          </div>
         </div>
+
+        {/* File Options */}
+        <AnimatePresence>
+          {showFileOptions && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.25 }}
+              className="flex space-x-3 pt-3"
+            >
+              <motion.label
+                className={`cursor-pointer p-2 rounded-lg transition-all ${themeClasses.hoverBg}`}
+                whileHover={{ scale: 1.1 }}
+                whileTap={{ scale: 0.95 }}
+                title="Unggah gambar"
+              >
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleFileUpload}
+                  multiple
+                />
+                <FiImage size={18} />
+              </motion.label>
+              <motion.label
+                className={`cursor-pointer p-2 rounded-lg transition-all ${themeClasses.hoverBg}`}
+                whileHover={{ scale: 1.1 }}
+                whileTap={{ scale: 0.95 }}
+                title="Unggah file"
+              >
+                <input
+                  type="file"
+                  accept=".pdf,.txt,.doc,.docx,.csv"
+                  className="hidden"
+                  onChange={handleFileUpload}
+                  multiple
+                />
+                <FiFile size={18} />
+              </motion.label>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
+      {/* Prism.js for syntax highlighting */}
+      <link 
+        id="prism-theme"
+        href={darkMode 
+          ? "https://cdnjs.cloudflare.com/ajax/libs/prism/1.24.1/themes/prism-tomorrow.min.css" 
+          : "https://cdnjs.cloudflare.com/ajax/libs/prism/1.24.1/themes/prism-coy.min.css"
+        } 
+        rel="stylesheet" 
+      />
+      <link 
+        href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.24.1/plugins/line-numbers/prism-line-numbers.min.css" 
+        rel="stylesheet" 
+      />
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.24.1/components/prism-core.min.js"></script>
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.24.1/plugins/autoloader/prism-autoloader.min.js"></script>
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.24.1/plugins/line-numbers/prism-line-numbers.min.js"></script>
+      
       <style jsx global>{`
         .typing-dot {
-          opacity: 0.6;
-          animation: pulseAnimation 1s infinite;
+          display: inline-block;
+          width: 8px;
+          height: 8px;
+          border-radius: 50%;
+          background-color: currentColor;
+          margin-right: 2px;
+          animation: typingAnimation 1.4s infinite ease-in-out;
         }
 
         .typing-dot:nth-child(1) {
@@ -2445,11 +1111,21 @@ and extremely friendly and very human little bit emoticon and get straight to th
 
         .typing-dot:nth-child(3) {
           animation-delay: 0.4s;
+          margin-right: 0;
         }
 
-        @keyframes pulseAnimation {
-          0%, 100% { opacity: 0.6; transform: scale(1); }
-          50% { opacity: 1; transform: scale(1.2); }
+        @keyframes typingAnimation {
+          0%, 60%, 100% { transform: translateY(0); }
+          30% { transform: translateY(-3px); }
+        }
+
+        .stop-btn {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          box-shadow: 0 14px 40px rgba(99,102,241,0.12), 0 8px 24px rgba(76,29,149,0.08);
+          border-radius: 10px;
+          transition: transform 0.12s ease, box-shadow 0.18s ease;
         }
 
         .code-container {
@@ -2564,13 +1240,14 @@ and extremely friendly and very human little bit emoticon and get straight to th
         }
 
         .chat-bubble {
-          padding: 20px 24px;
-          margin-bottom: 20px;
-          border-radius: 12px;
+          padding: 12px 16px;
+          margin-bottom: 16px;
+          border-radius: 16px;
+          max-width: 85%;
           word-wrap: break-word;
           animation: fadeInUp 0.3s ease;
-          box-shadow: 0 4px 15px rgba(0,0,0,0.08);
-          transition: all 0.3s ease;
+          box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+          transition: transform 0.3s ease, background-color 0.2s ease;
         }
 
         .chat-bubble.user {
@@ -2578,19 +1255,15 @@ and extremely friendly and very human little bit emoticon and get straight to th
           background-color: ${darkMode ? '#3b82f6' : '#dbeafe'};
           color: ${darkMode ? '#f8fafc' : '#1e3a8a'};
           margin-left: auto;
-          margin-right: 0;
-          max-width: 85%;
-          border-radius: 12px 12px 0 12px;
+          margin-right: 8px;
         }
 
         .chat-bubble.bot {
-          align-self: stretch;
-          background-color: ${darkMode ? '#0f172a' : '#f1f5f9'};
-          color: ${darkMode ? '#f1f5f9' : '#334155'};
-          margin: 0;
-          width: 100%;
-          border: 1px solid ${darkMode ? '#1e293b' : 'transparent'};
-          border-radius: 12px;
+          align-self: flex-start;
+          background-color: ${darkMode ? '#1e293b' : '#f1f5f9'};
+          color: ${darkMode ? '#e2e8f0' : '#334155'};
+          margin-right: auto;
+          margin-left: 8px;
         }
 
         @keyframes fadeInUp {
@@ -2602,43 +1275,6 @@ and extremely friendly and very human little bit emoticon and get straight to th
             opacity: 1;
             transform: translateY(0);
           }
-        }
-
-        .chat-bubble.bot:hover {
-          background-color: ${darkMode ? '#1e293b' : '#f8fafc'};
-          transform: translateY(-1px);
-          box-shadow: 0 8px 24px rgba(0,0,0,${darkMode ? '0.4' : '0.12'});
-        }
-
-        .chat-bubble.bot::before {
-          content: '';
-          position: absolute;
-          top: 0;
-          left: 0;
-          right: 0;
-          height: 2px;
-          background: linear-gradient(to right, 
-            ${darkMode ? 'rgba(59, 130, 246, 0.6)' : 'rgba(59, 130, 246, 0.3)'}, 
-            transparent 80%
-          );
-        }
-
-        .chat-bubble.bot::after {
-          content: '';
-          position: absolute;
-          bottom: 0;
-          left: 0;
-          right: 0;
-          height: 1px;
-          background: linear-gradient(to left, 
-            ${darkMode ? 'rgba(59, 130, 246, 0.3)' : 'rgba(59, 130, 246, 0.15)'}, 
-            transparent 80%
-          );
-        }
-
-        .chat-messages {
-          padding: 0;
-          width: 100%;
         }
 
         .prose {
@@ -2676,15 +1312,47 @@ and extremely friendly and very human little bit emoticon and get straight to th
         }
 
         .prose a {
-          color: #3b82f6;
+          color: #6b21a8;
           text-decoration: none;
           transition: all 0.2s ease;
           border-bottom: 1px solid transparent;
         }
 
         .prose a:hover {
-          color: #2563eb;
+          color: #4c1d95;
           border-bottom-color: currentColor;
+        }
+
+        .modern-input {
+          position: relative;
+          border: 1px solid var(--tw-border-opacity, 1);
+        }
+
+        .modern-input.focused {
+          box-shadow: 0 16px 48px rgba(20,23,40,0.10), 0 10px 28px rgba(99,102,241,0.08);
+          transform: translateY(-2px);
+          border-color: rgba(99,102,241,0.95);
+        }
+
+        .floating-label {
+          position: absolute;
+          left: 12px;
+          top: 8px;
+          font-size: 0.85rem;
+          transform-origin: left top;
+          transition: all 0.16s cubic-bezier(.2,.9,.2,1);
+          pointer-events: none;
+          opacity: 0.9;
+          transform: translateY(6px) scale(1);
+        }
+
+        .floating-label.active {
+          transform: translateY(-18px) scale(0.82);
+          color: #7c3aed;
+          top: 2px;
+          opacity: 0;
+          visibility: hidden;
+          pointer-events: none;
         }
 
         .prose img {
@@ -2709,206 +1377,6 @@ and extremely friendly and very human little bit emoticon and get straight to th
         .prose blockquote:hover {
           border-left-color: ${darkMode ? '#64748b' : '#94a3b8'};
         }
-
-        .table-container {
-          margin: 2em 0;
-          background: ${darkMode ? '#1e293b' : '#ffffff'};
-          border-radius: 16px;
-          box-shadow: ${darkMode ? 
-            '0 8px 32px rgba(0, 0, 0, 0.4)' : 
-            '0 8px 32px rgba(0, 0, 0, 0.1)'};
-          overflow: hidden;
-          border: 1px solid ${darkMode ? '#334155' : '#e2e8f0'};
-        }
-
-        .table-wrapper {
-          margin: 0;
-          padding: 1.5rem;
-          overflow-x: auto;
-          background: ${darkMode ? 
-            'linear-gradient(to right, #1e293b, #0f172a)' : 
-            'linear-gradient(to right, #ffffff, #f8fafc)'};
-        }
-
-        .table-title {
-          font-size: 1.1em;
-          font-weight: 600;
-          margin-bottom: 1rem;
-          color: ${darkMode ? '#60a5fa' : '#2563eb'};
-          padding-bottom: 0.5rem;
-          border-bottom: 2px solid ${darkMode ? '#334155' : '#e2e8f0'};
-          display: flex;
-          align-items: center;
-          gap: 0.5rem;
-        }
-
-        .table-title::before {
-          content: '📊';
-          font-size: 1.2em;
-        }
-
-        .markdown-table {
-          width: 100%;
-          border-collapse: separate;
-          border-spacing: 0;
-          font-size: 0.95em;
-          background: ${darkMode ? '#1e293b' : '#ffffff'};
-          border-radius: 8px;
-          overflow: hidden;
-          border: 1px solid ${darkMode ? '#334155' : '#e2e8f0'};
-        }
-
-        .markdown-table th,
-        .markdown-table td {
-          padding: 1rem 1.5rem;
-          text-align: left;
-          border-bottom: 1px solid ${darkMode ? 'rgba(51, 65, 85, 0.3)' : 'rgba(226, 232, 240, 0.5)'};
-          font-size: 0.95em;
-          line-height: 1.6;
-          white-space: nowrap;
-        }
-
-        .markdown-table td:not(:last-child),
-        .markdown-table th:not(:last-child) {
-          border-right: 1px solid ${darkMode ? 'rgba(51, 65, 85, 0.3)' : 'rgba(226, 232, 240, 0.5)'};
-        }
-
-        .markdown-table td:last-child {
-          white-space: normal;
-          min-width: 200px;
-        }
-
-        .markdown-table th:last-child,
-        .markdown-table td:last-child {
-          border-right: none;
-        }
-
-        .markdown-table tbody tr:last-child td {
-          border-bottom: none;
-        }
-
-        .markdown-table thead {
-          background: ${darkMode ? 
-            'linear-gradient(to right, #1e293b, #0f172a)' : 
-            'linear-gradient(to right, #f8fafc, #f1f5f9)'};
-          position: sticky;
-          top: 0;
-          z-index: 1;
-          box-shadow: 0 2px 4px ${darkMode ? 
-            'rgba(0, 0, 0, 0.3)' : 
-            'rgba(0, 0, 0, 0.1)'};
-        }
-
-        .markdown-table th {
-          font-weight: 600;
-          text-transform: uppercase;
-          font-size: 0.85em;
-          letter-spacing: 0.05em;
-          color: ${darkMode ? '#94a3b8' : '#475569'};
-          padding: 1.2rem 1.5rem;
-          position: relative;
-          background: ${darkMode ? 
-            'rgba(15, 23, 42, 0.8)' : 
-            'rgba(248, 250, 252, 0.8)'};
-        }
-
-        .markdown-table th::after {
-          content: '';
-          position: absolute;
-          bottom: 0;
-          left: 0;
-          right: 0;
-          height: 3px;
-          background: ${darkMode ? 
-            'linear-gradient(to right, #3b82f6, #2563eb)' : 
-            'linear-gradient(to right, #60a5fa, #3b82f6)'};
-          opacity: 0.7;
-          border-radius: 3px 3px 0 0;
-        }
-
-        .markdown-table tbody tr {
-          background: ${darkMode ? '#1e293b' : '#ffffff'};
-          transition: all 0.3s ease;
-        }
-
-        .markdown-table tbody tr:nth-child(even) {
-          background: ${darkMode ? 
-            'rgba(15, 23, 42, 0.3)' : 
-            'rgba(248, 250, 252, 0.5)'};
-        }
-
-        .markdown-table tbody tr:hover {
-          background: ${darkMode ? 
-            'rgba(51, 65, 85, 0.5)' : 
-            'rgba(241, 245, 249, 0.8)'};
-          transform: translateY(-1px);
-          box-shadow: 0 2px 8px ${darkMode ? 
-            'rgba(0, 0, 0, 0.2)' : 
-            'rgba(0, 0, 0, 0.05)'};
-        }
-
-        .markdown-table td {
-          transition: all 0.2s ease;
-          position: relative;
-        }
-
-        .markdown-table tbody tr:hover td {
-          color: ${darkMode ? '#f8fafc' : '#1e293b'};
-        }
-
-        .markdown-table tbody tr:last-child {
-          font-weight: 600;
-          background: ${darkMode ? 
-            'rgba(51, 65, 85, 0.3)' : 
-            'rgba(241, 245, 249, 0.5)'};
-        }
-
-        .markdown-table tbody tr:last-child td {
-          border-bottom: none;
-          color: ${darkMode ? '#93c5fd' : '#2563eb'};
-        }
-
-        .ascii-table-container {
-          margin: 1.5em 0;
-          padding: 1.5rem;
-          background: ${darkMode ? '#0f172a' : '#f8fafc'};
-          border-radius: 12px;
-          overflow-x: auto;
-          border: 1px solid ${darkMode ? '#334155' : '#e2e8f0'};
-          box-shadow: ${darkMode ? 
-            'inset 0 0 30px rgba(0,0,0,0.3), 0 0 20px rgba(0,0,0,0.3)' : 
-            'inset 0 0 30px rgba(0,0,0,0.05), 0 0 20px rgba(0,0,0,0.1)'};
-        }
-
-        .ascii-table {
-          font-family: 'Consolas', 'Courier New', monospace;
-          font-size: 0.9em;
-          line-height: 1.2;
-          white-space: pre;
-          color: ${darkMode ? '#a5f3fc' : '#0f172a'};
-          text-shadow: ${darkMode ? 
-            '0 0 5px rgba(165, 243, 252, 0.3)' : 
-            'none'};
-        }
-
-        @keyframes asciiGlow {
-          0% { opacity: 0.8; }
-          50% { opacity: 1; }
-          100% { opacity: 0.8; }
-        }
-
-        .ascii-table-container::before {
-          content: '$ ASCII Table Output';
-          display: block;
-          margin-bottom: 1rem;
-          font-family: 'Consolas', 'Courier New', monospace;
-          font-size: 0.8em;
-          color: ${darkMode ? '#64748b' : '#94a3b8'};
-          border-bottom: 1px solid ${darkMode ? '#334155' : '#e2e8f0'};
-          padding-bottom: 0.5rem;
-          animation: asciiGlow 2s infinite;
-        }
-
         .prose hr {
           border: none;
           border-top: 1px solid ${darkMode ? '#334155' : '#e2e8f0'};
