@@ -7,15 +7,7 @@ import Mail from '../apps/Mail';
 import Calendar from '../apps/Calendar';
 import FileExplorer from '../apps/FileExplorer';
 import PhotoViewer from '../apps/PhotoViewer';
-import CodeEditor from '../apps/CodeEditor';
-import Settings from '../apps/Settings';
-import ChatbotApp from '../../pages/Chatbot'; 
-import Typernova from '../apps/Typernova';
-
-
-
-
-
+import CodeEditor from '../apps/CodeEditor';  
 import WindowTitleBar from './WindowTitleBar';
 import '../../styles/windows.css';
 
@@ -23,7 +15,7 @@ const DesktopOS = () => {
   // Load saved state from localStorage
   const loadState = () => {
     try {
-      const savedState = localStorage.getItem('hypernovaOSState');
+      const savedState = localStorage.getItem('desktopState');
       if (savedState) {
         return JSON.parse(savedState);
       }
@@ -33,12 +25,23 @@ const DesktopOS = () => {
     return null;
   };
 
-  // Save state to localStorage with debounce
+  // Save state to localStorage
   const saveState = (state) => {
     try {
-      localStorage.setItem('hypernovaOSState', JSON.stringify(state));
+      localStorage.setItem('desktopState', JSON.stringify(state));
     } catch (e) {
       console.error('Failed to save state to localStorage', e);
+    }
+  };
+
+  const [selectedImage, setSelectedImage] = useState(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  
+  const handleOpenImage = (file) => {
+    setSelectedImage(file);
+    const photoViewerApp = apps.find(a => a.name === 'Photo Viewer');
+    if (photoViewerApp) {
+      openWindow(photoViewerApp.id);
     }
   };
 
@@ -48,466 +51,475 @@ const DesktopOS = () => {
       id: 1, 
       name: 'File Explorer', 
       icon: '📁',
-      component: FileExplorer,
+      content: <FileExplorer onOpenImage={handleOpenImage} />,
       defaultSize: { width: 900, height: 600 },
-      canResize: true,
-      category: 'system'
+      canResize: true
     },
-
-    
+    { 
+      id: 2, 
+      name: 'Browser', 
+      icon: '🌐',
+      content: (
+        <div className="p-4">
+          <div className="flex items-center gap-2 mb-4">
+            <button className="p-1 hover:bg-white/10 rounded">←</button>
+            <button className="p-1 hover:bg-white/10 rounded">→</button>
+            <button className="p-1 hover:bg-white/10 rounded">↻</button>
+            <input type="text" className="flex-1 px-3 py-1 bg-gray-700 rounded-md" defaultValue="https://www.orion-os.web.app" />
+          </div>
+          <div className="bg-white/5 p-4 rounded-md">
+            <h1 className="text-xl font-bold mb-2">Welcome to Orion OS</h1>
+            <p>Your next-generation cloud operating system</p>
+          </div>
+        </div>
+      ),
+      canResize: true
+    },
     { 
       id: 3, 
       name: 'Settings', 
       icon: '⚙️',
-      component: Settings,
-      defaultSize: { width: 1000, height: 700 },
-      canResize: true,
-      category: 'system'
+      content: (
+        <div className="p-4">
+          <h2 className="text-lg font-semibold mb-4">System Settings</h2>
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <span>Dark Mode</span>
+              <button className="px-3 py-1 bg-blue-500 rounded-md">Enabled</button>
+            </div>
+            <div className="flex items-center justify-between">
+              <span>Notifications</span>
+              <button className="px-3 py-1 bg-blue-500 rounded-md">Enabled</button>
+            </div>
+            <div className="flex items-center justify-between">
+              <span>Sound</span>
+              <input type="range" className="w-32" />
+            </div>
+          </div>
+        </div>
+      ),
+      canResize: true
     },
     { 
       id: 4, 
       name: 'Calculator', 
       icon: '🧮', 
-      component: Calculator, 
+      content: <Calculator />, 
       defaultSize: { width: 400, height: 600 },
-      canResize: false,
-      category: 'utilities'
+      canResize: false 
     },
     { 
       id: 5, 
       name: 'Terminal', 
       icon: '⌨️', 
-      component: Terminal, 
+      content: <Terminal />, 
       defaultSize: { width: 800, height: 500 },
-      canResize: true,
-      category: 'development'
+      canResize: true 
     },
     { 
       id: 6, 
       name: 'Notes', 
       icon: '📝', 
-      component: Notes, 
+      content: <Notes />, 
       defaultSize: { width: 800, height: 600 },
-      canResize: true,
-      category: 'utilities'
+      canResize: true 
     },
     { 
       id: 7, 
       name: 'Mail', 
       icon: '✉️', 
-      component: Mail, 
+      content: <Mail />, 
       defaultSize: { width: 1000, height: 600 },
-      canResize: true,
-      category: 'internet'
+      canResize: true 
     },
     { 
       id: 8, 
       name: 'Calendar', 
       icon: '📅', 
-      component: Calendar, 
+      content: <Calendar />, 
       defaultSize: { width: 900, height: 600 },
-      canResize: true,
-      category: 'utilities'
+      canResize: true 
     },
     { 
       id: 9, 
       name: 'Photo Viewer', 
       icon: '🖼️', 
-      component: PhotoViewer, 
+      content: <PhotoViewer file={selectedImage} />, 
       defaultSize: { width: 800, height: 600 },
-      canResize: true,
-      category: 'media'
+      canResize: true 
     },
     { 
       id: 10, 
       name: 'Code Editor', 
       icon: '💻', 
-      component: CodeEditor, 
+      content: <CodeEditor />, 
       defaultSize: { width: 800, height: 600 },
-      canResize: true,
-      category: 'development'
-    },
-
-   { 
-      id: 11, 
-      name: 'Orion Ai', 
-      icon: '🤖', 
-      component: ChatbotApp, 
-      defaultSize: { width: 800, height: 600 },
-      canResize: true,
-      category: 'development'
-    },
-
-   { 
-      id: 12, 
-      name: 'Typernova', 
-      icon: '📝', 
-      component: Typernova, 
-      defaultSize: { width: 800, height: 600 },
-      canResize: true,
-      category: 'development'
+      canResize: true 
     }
-
-
   ];
 
-  // Categories for start menu
-  const appCategories = [
-    { id: 'all', name: 'All apps' },
-    { id: 'system', name: 'System' },
-    { id: 'utilities', name: 'Utilities' },
-    { id: 'media', name: 'Media' },
-    { id: 'development', name: 'Development' },
-    { id: 'internet', name: 'Internet' }
-  ];
+  const filteredApps = apps.filter(app =>
+    app.name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   // Load initial state or set defaults
   const savedState = loadState();
-  const initialState = {
-    activeWindows: [],
-    focusedWindow: null,
-    isStartMenuOpen: false,
-    currentTime: new Date().toLocaleTimeString(),
-    windowPositions: {},
-    windowSizes: {},
-    minimizedWindows: [],
-    maximizedWindows: [],
-    previousWindowStates: {},
-    wallpaper: 'default',
-    theme: 'dark',
-    accentColor: '#3b82f6',
-    showPowerOptions: false,
-    showDesktop: false,
-    searchQuery: "",
-    selectedCategory: 'all',
-    notifications: [],
-    volume: 70,
-    brightness: 80,
-    batteryLevel: 87,
-    isCharging: false,
-    networkStatus: 'connected',
-    selectedImage: null,
-    recentFiles: [],
-    desktopIcons: true,
-    taskbarPosition: 'bottom',
-    animationEnabled: true,
-    transparencyEnabled: true,
-    startMenuLayout: 'grid',
-    fileExplorerView: 'icons'
+  const [activeWindows, setActiveWindows] = useState(savedState?.activeWindows || []);
+  const [focusedWindow, setFocusedWindow] = useState(savedState?.focusedWindow || null);
+  const [isStartMenuOpen, setIsStartMenuOpen] = useState(false);
+  const [currentTime, setCurrentTime] = useState(new Date().toLocaleTimeString());
+  const [windowPositions, setWindowPositions] = useState(savedState?.windowPositions || {});
+  // Clamp any saved sizes to viewport so windows aren't larger than screen
+  const clampSavedSizes = (sizes) => {
+    if (!sizes) return {};
+    const minW = 300;
+    const minH = 200;
+    const maxW = Math.max(minW, Math.floor(window.innerWidth * 0.95));
+    const maxH = Math.max(minH, Math.floor(window.innerHeight * 0.85));
+    const out = {};
+    Object.keys(sizes).forEach(k => {
+      const s = sizes[k] || {};
+      out[k] = {
+        width: Math.max(minW, Math.min(s.width || minW, maxW)),
+        height: Math.max(minH, Math.min(s.height || minH, maxH))
+      };
+    });
+    return out;
   };
 
-  const [state, setState] = useState({ ...initialState, ...savedState });
+  const [windowSizes, setWindowSizes] = useState(clampSavedSizes(savedState?.windowSizes || {}));
+  const [minimizedWindows, setMinimizedWindows] = useState(savedState?.minimizedWindows || []);
+  const [maximizedWindows, setMaximizedWindows] = useState(savedState?.maximizedWindows || []);
+  const [previousWindowStates, setPreviousWindowStates] = useState(savedState?.previousWindowStates || {});
   const [dragStartPosition, setDragStartPosition] = useState(null);
   const [windowStartPosition, setWindowStartPosition] = useState(null);
+  const [draggingApp, setDraggingApp] = useState(null);
   const [resizingWindow, setResizingWindow] = useState(null);
   const [resizeStartSize, setResizeStartSize] = useState(null);
   const [resizeStartPosition, setResizeStartPosition] = useState(null);
   const [resizeDirection, setResizeDirection] = useState(null);
-  const [showContextMenu, setShowContextMenu] = useState(false);
-  const [contextMenuPosition, setContextMenuPosition] = useState({ x: 0, y: 0 });
-  const [showNotificationCenter, setShowNotificationCenter] = useState(false);
-  const [showVolumeControl, setShowVolumeControl] = useState(false);
-  const [showNetworkControl, setShowNetworkControl] = useState(false);
-  const [showBatteryInfo, setShowBatteryInfo] = useState(false);
-  const [showClockCalendar, setShowClockCalendar] = useState(false);
-  const [showActionCenter, setShowActionCenter] = useState(false);
-  const [showFileContextMenu, setShowFileContextMenu] = useState(false);
-  const [fileContextMenuPosition, setFileContextMenuPosition] = useState({ x: 0, y: 0 });
-  const [selectedFile, setSelectedFile] = useState(null);
-  const [showDesktopContextMenu, setShowDesktopContextMenu] = useState(false);
-  const [desktopContextMenuPosition, setDesktopContextMenuPosition] = useState({ x: 0, y: 0 });
-  const [showTaskbarContextMenu, setShowTaskbarContextMenu] = useState(false);
-  const [taskbarContextMenuPosition, setTaskbarContextMenuPosition] = useState({ x: 0, y: 0 });
-  const [dragOverDesktop, setDragOverDesktop] = useState(false);
+  const [showDesktop, setShowDesktop] = useState(false);
+  const [wallpaper, setWallpaper] = useState(savedState?.wallpaper || 'default');
+  const [theme, setTheme] = useState(savedState?.theme || 'dark');
+  const [showPowerOptions, setShowPowerOptions] = useState(false);
+  const [compactMode, setCompactMode] = useState(window.innerWidth <= 700);
+  const [displayScale, setDisplayScale] = useState(savedState?.displayScale ?? null);
+  const [viewport, setViewport] = useState({ width: window.innerWidth, height: window.innerHeight });
+  const [animatingMaximize, setAnimatingMaximize] = useState(null);
 
-  const desktopRef = useRef(null);
-  const taskbarRef = useRef(null);
-  const startMenuRef = useRef(null);
-  const notificationCenterRef = useRef(null);
-  const actionCenterRef = useRef(null);
-
-  // Save state whenever it changes with debounce
+  // Save state whenever it changes
   useEffect(() => {
-    const timer = setTimeout(() => {
-      saveState(state);
-    }, 500);
+    const state = {
+      activeWindows,
+      focusedWindow,
+      windowPositions,
+      windowSizes,
+      minimizedWindows,
+      maximizedWindows,
+      previousWindowStates,
+      wallpaper,
+      theme
+      ,displayScale
+    };
+    saveState(state);
+  }, [
+    activeWindows, 
+    focusedWindow, 
+    windowPositions, 
+    windowSizes, 
+    minimizedWindows, 
+    maximizedWindows, 
+    previousWindowStates,
+    wallpaper,
+    theme
+    ,displayScale
+  ]);
 
-    return () => clearTimeout(timer);
-  }, [state]);
-
-  // Effect for updating time
+  // Effect for fullscreen and hiding Windows taskbar
   useEffect(() => {
-    const timer = setInterval(() => {
-      setState(prev => ({
-        ...prev,
-        currentTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-      }));
-    }, 1000);
-
-    return () => clearInterval(timer);
-  }, []);
-
-  // Effect for battery simulation
-  useEffect(() => {
-    const batteryTimer = setInterval(() => {
-      setState(prev => {
-        const newLevel = prev.isCharging 
-          ? Math.min(100, prev.batteryLevel + 1)
-          : Math.max(0, prev.batteryLevel - 0.2);
-        
-        return {
-          ...prev,
-          batteryLevel: newLevel,
-          isCharging: newLevel >= 100 ? false : prev.isCharging
-        };
-      });
-    }, 60000);
-
-    return () => clearInterval(batteryTimer);
-  }, []);
-   
-
-
-  // Effect for handling clicks outside of menus
-  useEffect(() => {
-    const handleClickOutside = (e) => {
-      if (startMenuRef.current && !startMenuRef.current.contains(e.target) && 
-          !e.target.closest('.start-button')) {
-        setState(prev => ({ ...prev, isStartMenuOpen: false }));
-      }
-      
-      if (notificationCenterRef.current && !notificationCenterRef.current.contains(e.target) && 
-          !e.target.closest('.notification-center-button')) {
-        setShowNotificationCenter(false);
-      }
-      
-      if (actionCenterRef.current && !actionCenterRef.current.contains(e.target) && 
-          !e.target.closest('.action-center-button')) {
-        setShowActionCenter(false);
-      }
-      
-      if (!e.target.closest('.context-menu')) {
-        setShowContextMenu(false);
-        setShowDesktopContextMenu(false);
-        setShowTaskbarContextMenu(false);
-        setShowFileContextMenu(false);
+    const enableFullScreen = async () => {
+      try {
+        if (!document.fullscreenElement) {
+          await document.documentElement.requestFullscreen();
+        }
+        document.body.style.cursor = 'default';
+        document.documentElement.style.overflow = 'hidden';
+        document.body.style.overflow = 'hidden';
+      } catch (err) {
+        console.error("Error attempting to enable fullscreen:", err);
       }
     };
 
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    enableFullScreen();
+
+    return () => {
+      document.body.style.cursor = '';
+      document.documentElement.style.overflow = '';
+      document.body.style.overflow = '';
+      if (document.fullscreenElement) {
+        document.exitFullscreen();
+      }
+    };
   }, []);
-  
 
-  // Filter apps based on search and category
-  const filteredApps = apps.filter(app => 
-    app.name.toLowerCase().includes(state.searchQuery.toLowerCase()) &&
-    (state.selectedCategory === 'all' || app.category === state.selectedCategory)
-  );
+  // Update clock
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
 
-  // Window management functions
-  const openWindow = (appId, file = null) => {
-    const app = apps.find(a => a.id === appId);
-    
-    setState(prev => {
-      const isMinimized = prev.minimizedWindows.includes(appId);
-      const isAlreadyOpen = prev.activeWindows.includes(appId);
+  // Responsive compact mode for small screens
+  useEffect(() => {
+    const handleResize = () => {
+      setCompactMode(window.innerWidth <= 700);
+      setViewport({ width: window.innerWidth, height: window.innerHeight });
+    };
+
+    window.addEventListener('resize', handleResize);
+    // Set initial state
+    handleResize();
+
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // Apply display scale using a transform on the wrapper for smoother animation and better compatibility
+  useEffect(() => {
+    const el = wrapperRef.current;
+    if (!el) return;
+
+    let scale = 1;
+    if (displayScale) scale = displayScale;
+    else if (!compactMode) scale = 0.95;
+
+    el.style.transform = `scale(${scale})`;
+    el.style.width = `${100 / scale}vw`; // keep layout sizing consistent when scaling
+    el.style.height = `${100 / scale}vh`;
+
+    return () => {
+      try {
+        el.style.transform = '';
+        el.style.width = '';
+        el.style.height = '';
+      } catch (e) {}
+    };
+  }, [compactMode, displayScale]);
+
+  // Listen for Ctrl + mouse wheel on the desktop wrapper only
+  useEffect(() => {
+    const el = wrapperRef.current;
+    if (!el) return;
+
+    const handleCtrlWheel = (e) => {
+      if (!e.ctrlKey) return;
+      // prevent page from zooming/scrolling the browser when inside the app
+      try { e.preventDefault(); } catch (err) {}
+
+      const step = 0.05;
+      const currentZoom = displayScale ?? (!compactMode ? 0.95 : 1);
+      let next = currentZoom + (e.deltaY < 0 ? step : -step);
+      next = Math.max(0.6, Math.min(1.5, next));
+      next = Math.round(next * 100) / 100; // keep two decimals
+      setDisplayScale(next);
+    };
+
+    el.addEventListener('wheel', handleCtrlWheel, { passive: false });
+    return () => {
+      el.removeEventListener('wheel', handleCtrlWheel);
+    };
+  }, [compactMode, displayScale]);
+
+  const openWindow = (appId) => {
+    if (minimizedWindows.includes(appId)) {
+      setMinimizedWindows(minimizedWindows.filter(id => id !== appId));
+      setFocusedWindow(appId);
+    } else if (!activeWindows.includes(appId)) {
+      setActiveWindows([...activeWindows, appId]);
+      const app = apps.find(a => a.id === appId);
       
-      // If window is minimized, restore it
-      if (isMinimized) {
-        return {
-          ...prev,
-          minimizedWindows: prev.minimizedWindows.filter(id => id !== appId),
-          focusedWindow: appId,
-          isStartMenuOpen: false
-        };
+      // Set initial position and size if not set
+      if (!windowPositions[appId]) {
+        setWindowPositions({
+          ...windowPositions,
+          [appId]: {
+            x: 50 + (activeWindows.length * 30),
+            y: 50 + (activeWindows.length * 30)
+          }
+        });
       }
       
-      // If window is not open, add it
-      if (!isAlreadyOpen) {
-        const newPositions = { ...prev.windowPositions };
-        const newSizes = { ...prev.windowSizes };
-        
-        // Set initial position if not set
-        if (!newPositions[appId]) {
-          newPositions[appId] = {
-            x: 50 + (prev.activeWindows.length * 30),
-            y: 50 + (prev.activeWindows.length * 30)
-          };
-        }
-        
-        // Set initial size if not set
-        if (!newSizes[appId] && app.defaultSize) {
-          newSizes[appId] = app.defaultSize;
-        }
-        
-        // Add to recent files if opening with a file
-        let newRecentFiles = [...prev.recentFiles];
-        if (file) {
-          newRecentFiles = [file, ...prev.recentFiles.filter(f => f.path !== file.path)].slice(0, 10);
-        }
-        
-        return {
-          ...prev,
-          activeWindows: [...prev.activeWindows, appId],
-          windowPositions: newPositions,
-          windowSizes: newSizes,
-          focusedWindow: appId,
-          isStartMenuOpen: false,
-          recentFiles: newRecentFiles
+      if (!windowSizes[appId] && app.defaultSize) {
+        // Ensure default size fits within the current viewport (mobile-friendly)
+        const clampSize = (s) => {
+          const minW = 300;
+          const minH = 200;
+          const tb = compactMode ? 40 : 48;
+          const maxW = Math.max(minW, Math.floor(window.innerWidth * 0.95));
+          // respect taskbar when computing max height
+          const maxH = Math.max(minH, Math.floor((window.innerHeight - tb) * 0.95));
+          const w = s?.width ? Math.max(minW, Math.min(s.width, maxW)) : minW;
+          const h = s?.height ? Math.max(minH, Math.min(s.height, maxH)) : minH;
+          return { width: w, height: h };
         };
+
+        const size = clampSize(app.defaultSize);
+        // ensure initial Y position keeps the window visible
+  const maxY = Math.max(0, getContainerSize().height - size.height - taskbarHeight);
+        setWindowPositions({
+          ...windowPositions,
+          [appId]: {
+            x: 50 + (activeWindows.length * 30),
+            y: Math.min(50 + (activeWindows.length * 30), maxY)
+          }
+        });
+
+        setWindowSizes({
+          ...windowSizes,
+          [appId]: size
+        });
       }
-      
-      // If window is already open and not minimized, just focus it
-      return {
-        ...prev,
-        focusedWindow: appId,
-        isStartMenuOpen: false
-      };
-    });
+    }
+    setFocusedWindow(appId);
+    setIsStartMenuOpen(false);
   };
 
   const closeWindow = (e, appId) => {
     e.stopPropagation();
+    setActiveWindows(activeWindows.filter(id => id !== appId));
+    setMinimizedWindows(minimizedWindows.filter(id => id !== appId));
+    setMaximizedWindows(maximizedWindows.filter(id => id !== appId));
     
-    setState(prev => {
-      const newActiveWindows = prev.activeWindows.filter(id => id !== appId);
-      const newMinimizedWindows = prev.minimizedWindows.filter(id => id !== appId);
-      const newMaximizedWindows = prev.maximizedWindows.filter(id => id !== appId);
-      
-      let newFocusedWindow = prev.focusedWindow;
-      if (prev.focusedWindow === appId) {
-        const remainingWindows = newActiveWindows.filter(id => !newMinimizedWindows.includes(id));
-        newFocusedWindow = remainingWindows.length > 0 ? remainingWindows[remainingWindows.length - 1] : null;
-      }
-      
-      return {
-        ...prev,
-        activeWindows: newActiveWindows,
-        minimizedWindows: newMinimizedWindows,
-        maximizedWindows: newMaximizedWindows,
-        focusedWindow: newFocusedWindow
-      };
-    });
+    if (focusedWindow === appId) {
+      const remainingWindows = activeWindows.filter(id => id !== appId);
+      setFocusedWindow(remainingWindows[remainingWindows.length - 1]);
+    }
   };
 
   const minimizeWindow = (e, appId) => {
     e.stopPropagation();
-    
-    setState(prev => {
-      if (!prev.minimizedWindows.includes(appId)) {
-        const newMinimizedWindows = [...prev.minimizedWindows, appId];
-        
-        let newFocusedWindow = prev.focusedWindow;
-        if (prev.focusedWindow === appId) {
-          const remainingWindows = prev.activeWindows.filter(
-            id => !newMinimizedWindows.includes(id)
-          );
-          newFocusedWindow = remainingWindows.length > 0 ? remainingWindows[remainingWindows.length - 1] : null;
-        }
-        
-        return {
-          ...prev,
-          minimizedWindows: newMinimizedWindows,
-          focusedWindow: newFocusedWindow
-        };
-      }
-      return prev;
-    });
+    if (!minimizedWindows.includes(appId)) {
+      setMinimizedWindows([...minimizedWindows, appId]);
+    }
+    if (focusedWindow === appId) {
+      const remainingWindows = activeWindows.filter(
+        id => !minimizedWindows.includes(id) && id !== appId
+      );
+      setFocusedWindow(remainingWindows[remainingWindows.length - 1]);
+    }
   };
 
   const maximizeWindow = (e, appId) => {
     e.stopPropagation();
     
-    setState(prev => {
-      if (prev.maximizedWindows.includes(appId)) {
-        // Restore previous state
-        const prevState = prev.previousWindowStates[appId];
-        if (prevState) {
-          const newPositions = { ...prev.windowPositions };
-          const newSizes = { ...prev.windowSizes };
-          
-          newPositions[appId] = prevState.position;
-          newSizes[appId] = prevState.size;
-          
-          return {
-            ...prev,
-            windowPositions: newPositions,
-            windowSizes: newSizes,
-            maximizedWindows: prev.maximizedWindows.filter(id => id !== appId)
-          };
-        }
-        
-        return {
-          ...prev,
-          maximizedWindows: prev.maximizedWindows.filter(id => id !== appId)
-        };
-      } else {
-        // Save current state and maximize
-        const newPreviousStates = { ...prev.previousWindowStates };
-        const newPositions = { ...prev.windowPositions };
-        const newSizes = { ...prev.windowSizes };
-        
-        newPreviousStates[appId] = {
-          position: prev.windowPositions[appId] || { x: 50, y: 50 },
-          size: prev.windowSizes[appId] || { width: 800, height: 500 }
-        };
-        
-        newPositions[appId] = { x: 0, y: 0 };
-        newSizes[appId] = { 
-          width: window.innerWidth, 
-          height: window.innerHeight - (prev.taskbarPosition === 'bottom' ? 48 : 0) 
-        };
-        
-        return {
-          ...prev,
-          previousWindowStates: newPreviousStates,
-          windowPositions: newPositions,
-          windowSizes: newSizes,
-          maximizedWindows: [...prev.maximizedWindows, appId]
-        };
+    if (maximizedWindows.includes(appId)) {
+      // Restore previous state
+      const prevState = previousWindowStates[appId];
+      if (prevState) {
+        setWindowPositions({
+          ...windowPositions,
+          [appId]: prevState.position
+        });
+        setWindowSizes({
+          ...windowSizes,
+          [appId]: prevState.size
+        });
       }
-    });
+
+      setMaximizedWindows(maximizedWindows.filter(id => id !== appId));
+    } else {
+      // Save current state and animate maximize from center to full
+      setPreviousWindowStates({
+        ...previousWindowStates,
+        [appId]: {
+          position: windowPositions[appId],
+          size: windowSizes[appId]
+        }
+      });
+
+      const container = getContainerSize();
+      const currSize = windowSizes[appId] || { width: 800, height: 500 };
+      const centerX = Math.max(0, Math.floor((container.width - currSize.width) / 2));
+      const centerY = Math.max(0, Math.floor((container.height - currSize.height - taskbarHeight) / 2));
+
+      // Jump window to center first, then expand to full container for a nice center-to-full animation
+      setWindowPositions({
+        ...windowPositions,
+        [appId]: { x: centerX, y: centerY }
+      });
+
+      setAnimatingMaximize(appId);
+
+      // Small timeout to allow layout animation to pick up the center position before expanding
+      setTimeout(() => {
+        setWindowPositions({
+          ...windowPositions,
+          [appId]: { x: 0, y: 0 }
+        });
+
+        const tb = compactMode ? 40 : 48;
+        setWindowSizes({
+          ...windowSizes,
+          [appId]: { 
+            width: container.width, 
+            height: container.height - tb
+          }
+        });
+
+        setMaximizedWindows([...maximizedWindows, appId]);
+
+        // end animation flag after a short delay
+        setTimeout(() => setAnimatingMaximize(null), 350);
+      }, 60);
+    }
   };
 
   const handleDragStart = (e, appId) => {
-    if (state.maximizedWindows.includes(appId)) return;
-    
-    const position = state.windowPositions[appId] || { x: 50, y: 50 };
-    setDragStartPosition({ x: e.clientX, y: e.clientY });
+    if (maximizedWindows.includes(appId)) return;
+    // Only start drag with primary button
+    if (e?.button !== undefined && e.button !== 0) return;
+    const position = windowPositions[appId] || { x: 50, y: 50 };
+    try { e.preventDefault(); } catch (err) {}
+    setDragStartPosition(pointerToContainer(e));
     setWindowStartPosition(position);
-    
-    setState(prev => ({
-      ...prev,
-      focusedWindow: appId
-    }));
+    setFocusedWindow(appId);
+    setDraggingApp(appId);
+    // prevent text selection while dragging
+    document.body.style.userSelect = 'none';
   };
 
-  const handleDrag = (e, appId) => {
-    if (!dragStartPosition || !windowStartPosition || state.maximizedWindows.includes(appId)) return;
-
-    const deltaX = e.clientX - dragStartPosition.x;
-    const deltaY = e.clientY - dragStartPosition.y;
+  // Reusable drag handler (works with window-level mousemove)
+  const handleDrag = (e) => {
+    const appId = draggingApp;
+    if (!appId) return;
+    if (!dragStartPosition || !windowStartPosition || maximizedWindows.includes(appId)) return;
+    const pt = pointerToContainer(e);
+    const deltaX = pt.x - dragStartPosition.x;
+    const deltaY = pt.y - dragStartPosition.y;
 
     const newX = windowStartPosition.x + deltaX;
     const newY = windowStartPosition.y + deltaY;
 
-    const size = state.windowSizes[appId] || { width: 800, height: 500 };
-    const boundedX = Math.max(0, Math.min(newX, window.innerWidth - size.width));
-    const boundedY = Math.max(0, Math.min(newY, window.innerHeight - size.height - (state.taskbarPosition === 'bottom' ? 48 : 0)));
+    const size = windowSizes[appId] || { width: 800, height: 500 };
+    const container = getContainerSize();
+    const boundedX = Math.max(0, Math.min(newX, container.width - size.width));
+    const boundedY = Math.max(0, Math.min(newY, container.height - size.height - taskbarHeight));
 
-    setState(prev => ({
-      ...prev,
-      windowPositions: {
-        ...prev.windowPositions,
-        [appId]: { x: boundedX, y: boundedY }
-      }
-    }));
+    setWindowPositions({
+      ...windowPositions,
+      [appId]: { x: boundedX, y: boundedY }
+    });
   };
 
-  const handleDragEnd = () => {
+  const handleDragEnd = (appId) => {
+    // Called when pointer/mouse up
+    const id = appId ?? draggingApp;
+    if (id && maximizedWindows.includes(id)) return;
     setDragStartPosition(null);
     setWindowStartPosition(null);
+    setDraggingApp(null);
+    // restore user select
+    document.body.style.userSelect = '';
   };
 
   const startResize = (e, appId, direction) => {
@@ -517,20 +529,16 @@ const DesktopOS = () => {
     
     setResizingWindow(appId);
     setResizeDirection(direction);
-    setResizeStartSize(state.windowSizes[appId] || app.defaultSize || { width: 800, height: 500 });
-    setResizeStartPosition({ x: e.clientX, y: e.clientY });
-    
-    setState(prev => ({
-      ...prev,
-      focusedWindow: appId
-    }));
+    setResizeStartSize(windowSizes[appId] || app.defaultSize || { width: 800, height: 500 });
+    setResizeStartPosition(pointerToContainer(e));
+    setFocusedWindow(appId);
   };
 
   const handleResize = (e) => {
     if (!resizingWindow || !resizeStartSize || !resizeStartPosition) return;
-    
-    const deltaX = e.clientX - resizeStartPosition.x;
-    const deltaY = e.clientY - resizeStartPosition.y;
+    const pt = pointerToContainer(e);
+    const deltaX = pt.x - resizeStartPosition.x;
+    const deltaY = pt.y - resizeStartPosition.y;
     
     let newWidth = resizeStartSize.width;
     let newHeight = resizeStartSize.height;
@@ -546,21 +554,18 @@ const DesktopOS = () => {
     
     if (resizeDirection.includes('left')) {
       const newLeftWidth = Math.max(minWidth, resizeStartSize.width - deltaX);
-      const newX = state.windowPositions[resizingWindow].x + (resizeStartSize.width - newLeftWidth);
+      const newX = windowPositions[resizingWindow].x + (resizeStartSize.width - newLeftWidth);
       
       // Only update if we have space to move left
       if (newX >= 0) {
         newWidth = newLeftWidth;
-        setState(prev => ({
-          ...prev,
-          windowPositions: {
-            ...prev.windowPositions,
-            [resizingWindow]: {
-              ...prev.windowPositions[resizingWindow],
-              x: newX
-            }
+        setWindowPositions({
+          ...windowPositions,
+          [resizingWindow]: {
+            ...windowPositions[resizingWindow],
+            x: newX
           }
-        }));
+        });
       }
     }
     
@@ -570,34 +575,28 @@ const DesktopOS = () => {
     
     if (resizeDirection.includes('top')) {
       const newTopHeight = Math.max(minHeight, resizeStartSize.height - deltaY);
-      const newY = state.windowPositions[resizingWindow].y + (resizeStartSize.height - newTopHeight);
+      const newY = windowPositions[resizingWindow].y + (resizeStartSize.height - newTopHeight);
       
       // Only update if we have space to move up
       if (newY >= 0) {
         newHeight = newTopHeight;
-        setState(prev => ({
-          ...prev,
-          windowPositions: {
-            ...prev.windowPositions,
-            [resizingWindow]: {
-              ...prev.windowPositions[resizingWindow],
-              y: newY
-            }
+        setWindowPositions({
+          ...windowPositions,
+          [resizingWindow]: {
+            ...windowPositions[resizingWindow],
+            y: newY
           }
-        }));
+        });
       }
     }
     
-    setState(prev => ({
-      ...prev,
-      windowSizes: {
-        ...prev.windowSizes,
-        [resizingWindow]: {
-          width: newWidth,
-          height: newHeight
-        }
+    setWindowSizes({
+      ...windowSizes,
+      [resizingWindow]: {
+        width: newWidth,
+        height: newHeight
       }
-    }));
+    });
   };
 
   const endResize = () => {
@@ -619,26 +618,27 @@ const DesktopOS = () => {
     }
   }, [resizingWindow, resizeStartSize, resizeStartPosition, resizeDirection]);
 
+  // Attach global mousemove/mouseup when a window drag is active
+  useEffect(() => {
+    if (draggingApp) {
+      window.addEventListener('mousemove', handleDrag);
+      window.addEventListener('mouseup', handleDragEnd);
+      return () => {
+        window.removeEventListener('mousemove', handleDrag);
+        window.removeEventListener('mouseup', handleDragEnd);
+      };
+    }
+  }, [draggingApp, dragStartPosition, windowStartPosition, windowSizes, windowPositions, maximizedWindows]);
+
   const toggleShowDesktop = () => {
-    setState(prev => {
-      const newShowDesktop = !prev.showDesktop;
-      
-      if (newShowDesktop) {
-        // Minimize all windows when showing desktop
-        return {
-          ...prev,
-          showDesktop: newShowDesktop,
-          minimizedWindows: [...prev.minimizedWindows, ...prev.activeWindows.filter(id => !prev.minimizedWindows.includes(id))]
-        };
-      } else {
-        // Restore previously minimized windows
-        return {
-          ...prev,
-          showDesktop: newShowDesktop,
-          minimizedWindows: []
-        };
-      }
-    });
+    setShowDesktop(!showDesktop);
+    if (!showDesktop) {
+      // Minimize all windows when showing desktop
+      setMinimizedWindows([...minimizedWindows, ...activeWindows.filter(id => !minimizedWindows.includes(id))]);
+    } else {
+      // Restore previously minimized windows
+      setMinimizedWindows([]);
+    }
   };
 
   const handlePowerAction = (action) => {
@@ -657,399 +657,257 @@ const DesktopOS = () => {
         break;
       case 'logout':
         // Handle logout
-        localStorage.removeItem('hypernovaOSState');
         window.location.reload();
         break;
       default:
         break;
     }
-    
-    setState(prev => ({
-      ...prev,
-      showPowerOptions: false
-    }));
+    setShowPowerOptions(false);
   };
 
   const changeWallpaper = (newWallpaper) => {
-    setState(prev => ({
-      ...prev,
-      wallpaper: newWallpaper
-    }));
+    setWallpaper(newWallpaper);
   };
 
   const changeTheme = (newTheme) => {
-    setState(prev => ({
-      ...prev,
-      theme: newTheme
-    }));
+    setTheme(newTheme);
   };
 
-  const changeAccentColor = (color) => {
-    setState(prev => ({
-      ...prev,
-      accentColor: color
-    }));
-  };
-
-  const toggleDesktopIcons = () => {
-    setState(prev => ({
-      ...prev,
-      desktopIcons: !prev.desktopIcons
-    }));
-  };
-
-  const changeTaskbarPosition = (position) => {
-    setState(prev => ({
-      ...prev,
-      taskbarPosition: position
-    }));
-  };
-
-  const toggleAnimations = () => {
-    setState(prev => ({
-      ...prev,
-      animationEnabled: !prev.animationEnabled
-    }));
-  };
-
-  const toggleTransparency = () => {
-    setState(prev => ({
-      ...prev,
-      transparencyEnabled: !prev.transparencyEnabled
-    }));
-  };
-
-  const changeStartMenuLayout = (layout) => {
-    setState(prev => ({
-      ...prev,
-      startMenuLayout: layout
-    }));
-  };
-
-  const changeFileExplorerView = (view) => {
-    setState(prev => ({
-      ...prev,
-      fileExplorerView: view
-    }));
+  const setScale = (scale) => {
+    setDisplayScale(scale);
   };
 
   // Arrange windows functions
   const arrangeWindows = (type) => {
-    const visibleWindows = state.activeWindows.filter(id => !state.minimizedWindows.includes(id));
+    const visibleWindows = activeWindows.filter(id => !minimizedWindows.includes(id));
     
     if (visibleWindows.length === 0) return;
     
-    setState(prev => {
-      const newPositions = {...prev.windowPositions};
-      const newSizes = {...prev.windowSizes};
-      
-      if (type === 'cascade') {
-        visibleWindows.forEach((id, index) => {
-          newPositions[id] = {
-            x: 50 + (index * 30),
-            y: 50 + (index * 30)
-          };
-          
-          const app = apps.find(a => a.id === id);
-          newSizes[id] = app.defaultSize || { width: 800, height: 500 };
-        });
-      } else if (type === 'stack') {
-        const windowWidth = window.innerWidth / Math.min(visibleWindows.length, 3);
-        
-        visibleWindows.forEach((id, index) => {
-          newPositions[id] = {
-            x: (index % 3) * windowWidth,
-            y: Math.floor(index / 3) * 200
-          };
-          
-          newSizes[id] = {
-            width: windowWidth,
-            height: 300
-          };
-        });
-      } else if (type === 'side-by-side') {
-        if (visibleWindows.length === 2) {
-          const windowWidth = window.innerWidth / 2;
-          
-          visibleWindows.forEach((id, index) => {
-            newPositions[id] = {
-              x: index * windowWidth,
-              y: 0
-            };
-            
-            newSizes[id] = {
-              width: windowWidth,
-              height: window.innerHeight - (prev.taskbarPosition === 'bottom' ? 48 : 0)
-            };
-          });
-        }
-      }
-      
-      return {
-        ...prev,
-        windowPositions: newPositions,
-        windowSizes: newSizes,
-        maximizedWindows: []
-      };
-    });
-  };
-
-  // Context menu handlers
-  const handleDesktopContextMenu = (e) => {
-    e.preventDefault();
-    setDesktopContextMenuPosition({ x: e.clientX, y: e.clientY });
-    setShowDesktopContextMenu(true);
-    setShowContextMenu(false);
-    setShowFileContextMenu(false);
-    setShowTaskbarContextMenu(false);
-  };
-
-  const handleTaskbarContextMenu = (e) => {
-    e.preventDefault();
-    setTaskbarContextMenuPosition({ x: e.clientX, y: e.clientY });
-    setShowTaskbarContextMenu(true);
-    setShowContextMenu(false);
-    setShowFileContextMenu(false);
-    setShowDesktopContextMenu(false);
-  };
-
-  const handleFileContextMenu = (e, file) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setFileContextMenuPosition({ x: e.clientX, y: e.clientY });
-    setSelectedFile(file);
-    setShowFileContextMenu(true);
-    setShowContextMenu(false);
-    setShowDesktopContextMenu(false);
-    setShowTaskbarContextMenu(false);
-  };
-
-  const handleDragOverDesktop = (e) => {
-    e.preventDefault();
-    setDragOverDesktop(true);
-  };
-
-  const handleDragLeaveDesktop = () => {
-    setDragOverDesktop(false);
-  };
-
-  const handleDropOnDesktop = (e) => {
-    e.preventDefault();
-    setDragOverDesktop(false);
-    // Handle file drop logic here
-  };
-
-  // Notification functions
-  const addNotification = (title, message, icon = 'ℹ️') => {
-    const newNotification = {
-      id: Date.now(),
-      title,
-      message,
-      icon,
-      time: new Date().toLocaleTimeString(),
-      read: false
-    };
+    const newPositions = {...windowPositions};
+    const newSizes = {...windowSizes};
     
-    setState(prev => ({
-      ...prev,
-      notifications: [newNotification, ...prev.notifications].slice(0, 50)
-    }));
+    if (type === 'cascade') {
+      visibleWindows.forEach((id, index) => {
+        newPositions[id] = {
+          x: 50 + (index * 30),
+          y: 50 + (index * 30)
+        };
+        
+        const app = apps.find(a => a.id === id);
+        newSizes[id] = app.defaultSize || { width: 800, height: 500 };
+      });
+    } else if (type === 'stack') {
+      // Arrange windows in a responsive grid that adapts to width and height
+      const tb = compactMode ? 40 : 48;
+      const availableW = window.innerWidth;
+      const availableH = window.innerHeight - tb;
+
+      // Determine number of columns by trying to keep windows at least 320px wide
+      const minWindowWidth = 320;
+      const cols = Math.max(1, Math.min( Math.floor(availableW / minWindowWidth), visibleWindows.length));
+
+      const windowWidth = Math.max(300, Math.floor(availableW / cols));
+      const rows = Math.ceil(visibleWindows.length / cols);
+      const rowHeight = Math.max(200, Math.floor(availableH / rows));
+
+      visibleWindows.forEach((id, index) => {
+        const col = index % cols;
+        const row = Math.floor(index / cols);
+        const x = col * windowWidth;
+        const y = row * rowHeight;
+
+        newPositions[id] = { x, y };
+
+        newSizes[id] = {
+          width: Math.min(windowWidth, Math.floor(window.innerWidth * 0.95)),
+          height: Math.min(rowHeight, Math.floor(availableH * 0.95))
+        };
+      });
+    } else if (type === 'side-by-side') {
+      if (visibleWindows.length === 2) {
+        const tb = compactMode ? 40 : 48;
+        const windowWidth = Math.floor(window.innerWidth / 2);
+        const availableH = window.innerHeight - tb;
+
+        visibleWindows.forEach((id, index) => {
+          newPositions[id] = {
+            x: index * windowWidth,
+            y: 0
+          };
+
+          newSizes[id] = {
+            width: Math.min(windowWidth, Math.floor(window.innerWidth * 0.95)),
+            height: Math.min(availableH, Math.floor(window.innerHeight * 0.95))
+          };
+        });
+      }
+    }
+    
+    setWindowPositions(newPositions);
+    setWindowSizes(newSizes);
+    setMaximizedWindows([]);
   };
 
-  const markNotificationAsRead = (id) => {
-    setState(prev => ({
-      ...prev,
-      notifications: prev.notifications.map(n => 
-        n.id === id ? { ...n, read: true } : n
-      )
-    }));
-  };
+const wallpaperStyles = {
+  default: 'bg-[url("/wallpaper1.png")] bg-cover bg-center',
+  nature: 'bg-[url("/wallpaper1.png")] bg-cover bg-center',
+  abstract: 'bg-[url("/wallpaper1.png")] bg-cover bg-center',
+  dark: 'bg-[url("/wallpaper1.png")] bg-cover bg-center',
+  light: 'bg-[url("/wallpaper1.png")] bg-cover bg-center'
+};
 
-  const clearAllNotifications = () => {
-    setState(prev => ({
-      ...prev,
-      notifications: []
-    }));
-  };
 
-  // Wallpaper styles
-  const wallpaperStyles = {
-    default: 'bg-gradient-to-br from-blue-900 to-purple-900',
-    nature: 'bg-[url("/wallpapers/nature.jpg")] bg-cover bg-center',
-    abstract: 'bg-[url("/wallpapers/abstract.jpg")] bg-cover bg-center',
-    dark: 'bg-[url("/wallpapers/dark.jpg")] bg-cover bg-center',
-    light: 'bg-[url("/wallpapers/light.jpg")] bg-cover bg-center',
-    space: 'bg-[url("/wallpapers/space.jpg")] bg-cover bg-center',
-    city: 'bg-[url("/wallpapers/city.jpg")] bg-cover bg-center'
-  };
 
   // Theme styles
   const themeStyles = {
     dark: {
       window: 'bg-[#2a2b2e] text-white',
       taskbar: 'bg-[#1a1b1e]/95',
-      startMenu: 'bg-gradient-to-br from-[#22252A] to-[#1A1C1F]',
-      contextMenu: 'bg-[#2a2b2e] text-white',
-      hover: 'hover:bg-white/10',
-      active: 'bg-white/20',
-      border: 'border-white/10'
+      startMenu: 'bg-gradient-to-br from-[#22252A] to-[#1A1C1F]'
     },
     light: {
       window: 'bg-[#f5f5f5] text-black',
       taskbar: 'bg-[#e5e5e5]/95',
-      startMenu: 'bg-gradient-to-br from-[#f0f0f0] to-[#e0e0e0]',
-      contextMenu: 'bg-[#f5f5f5] text-black',
-      hover: 'hover:bg-black/10',
-      active: 'bg-black/20',
-      border: 'border-black/10'
+      startMenu: 'bg-gradient-to-br from-[#f0f0f0] to-[#e0e0e0]'
     },
     blue: {
       window: 'bg-[#2a3b5e] text-white',
       taskbar: 'bg-[#1a2b4e]/95',
-      startMenu: 'bg-gradient-to-br from-[#223355] to-[#1a2b4e]',
-      contextMenu: 'bg-[#2a3b5e] text-white',
-      hover: 'hover:bg-white/10',
-      active: 'bg-white/20',
-      border: 'border-white/10'
+      startMenu: 'bg-gradient-to-br from-[#223355] to-[#1a2b4e]'
     }
   };
 
-  // Accent color styles
-  const accentColorStyles = {
-    backgroundColor: state.accentColor,
-    borderColor: state.accentColor,
-    hoverColor: `${state.accentColor}80`
+  const wallpaperInline = {
+    backgroundImage: `url(/wallpaper1.png)`,
+    backgroundSize: 'cover',
+    backgroundPosition: 'center',
+    backgroundRepeat: 'no-repeat',
+    minHeight: '100vh'
+  };
+  const wrapperRef = useRef(null);
+  const taskbarHeight = compactMode ? 40 : 48;
+
+  // Helper to get the actual container size (works with transform-scale wrapper)
+  const getContainerSize = () => {
+    const el = wrapperRef.current;
+    if (el) {
+      return { width: el.clientWidth, height: el.clientHeight };
+    }
+    return { width: window.innerWidth, height: window.innerHeight };
+  };
+
+  // Effective scale used by the wrapper (matches the transform applied)
+  const getEffectiveScale = () => {
+    if (displayScale) return displayScale;
+    return compactMode ? 1 : 0.95;
+  };
+
+  // Convert a pointer event to container-local coordinates (taking wrapper transform scale into account)
+  const pointerToContainer = (e) => {
+    const el = wrapperRef.current;
+    const scale = getEffectiveScale();
+    const rect = el ? el.getBoundingClientRect() : { left: 0, top: 0 };
+    const clientX = e?.clientX ?? (e?.touches && e.touches[0]?.clientX) ?? 0;
+    const clientY = e?.clientY ?? (e?.touches && e.touches[0]?.clientY) ?? 0;
+    return {
+      x: (clientX - rect.left) / scale,
+      y: (clientY - rect.top) / scale
+    };
   };
 
   return (
-    <div 
-      className={`fixed inset-0 w-screen h-screen overflow-hidden select-none ${wallpaperStyles[state.wallpaper]}`}
-      onContextMenu={handleDesktopContextMenu}
-      onDragOver={handleDragOverDesktop}
-      onDragLeave={handleDragLeaveDesktop}
-      onDrop={handleDropOnDesktop}
-      ref={desktopRef}
-    >
+    <div style={wallpaperInline} className={`fixed inset-0 w-screen h-screen overflow-hidden select-none`}>
       {/* Desktop Background */}
-      <div className="absolute inset-0">
+      <div ref={wrapperRef} className="absolute inset-0" style={{ transformOrigin: 'top left', transition: 'transform 180ms ease' }}>
         {/* Desktop Icons - Aligned to left side */}
-        {state.desktopIcons && (
-          <div className="desktop-icons flex flex-col items-start gap-4 p-4">
-            {apps.map(app => (
-              <motion.div
-                key={app.id}
-                className={`desktop-icon flex items-center gap-3 p-2 cursor-pointer ${themeStyles[state.theme].hover} rounded-lg backdrop-blur-sm transition-colors group w-48`}
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                onClick={() => openWindow(app.id)}
-                onContextMenu={(e) => handleFileContextMenu(e, { name: app.name, type: 'app', icon: app.icon })}
-              >
-                <span className="text-3xl group-hover:drop-shadow-glow">{app.icon}</span>
-                <span className={`text-sm font-medium ${themeStyles[state.theme].window === 'bg-[#f5f5f5] text-black' ? 'text-black/90 group-hover:text-black' : 'text-white/90 group-hover:text-white'}`}>
-                  {app.name}
-                </span>
-              </motion.div>
-            ))}
-          </div>
-        )}
-
-        {/* Drag overlay */}
-        {dragOverDesktop && (
-          <div className="absolute inset-0 border-4 border-dashed border-white/50 bg-black/20 flex items-center justify-center">
-            <div className="text-white text-2xl font-bold backdrop-blur-md p-4 rounded-lg">
-              Drop files here
-            </div>
-          </div>
-        )}
+        <div
+          className={`desktop-icons flex flex-col items-start ${compactMode ? 'gap-2 p-2' : 'gap-4 p-4'}`}
+          style={{
+            maxHeight: `${Math.max(120, viewport.height - taskbarHeight - 160)}px`,
+            overflowY: 'auto'
+          }}
+        >
+          {apps.map(app => (
+            <motion.div
+              key={app.id}
+              className={`desktop-icon flex items-center gap-3 ${compactMode ? 'p-1' : 'p-2'} cursor-pointer hover:bg-white/10 rounded-lg backdrop-blur-sm transition-colors group ${compactMode ? 'w-36' : 'w-48'} ${
+                theme === 'light' ? 'hover:bg-black/10' : ''
+              }`}
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={() => openWindow(app.id)}
+            >
+              <span className={`${compactMode ? 'text-2xl' : 'text-3xl'} group-hover:drop-shadow-glow`}>{app.icon}</span>
+              <span className={`${compactMode ? 'text-xs' : 'text-sm'} font-medium group-hover:text-white ${
+                theme === 'light' ? 'text-black/90 group-hover:text-black' : 'text-white/90'
+              }`}>
+                {app.name}
+              </span>
+            </motion.div>
+          ))}
+        </div>
 
         {/* Active Windows */}
         <AnimatePresence>
-          {state.activeWindows.filter(id => !state.minimizedWindows.includes(id)).map((appId) => {
+          {activeWindows.filter(id => !minimizedWindows.includes(id)).map((appId) => {
             const app = apps.find(a => a.id === appId);
-            const isFocused = state.focusedWindow === appId;
-            const position = state.windowPositions[appId] || { x: 50, y: 50 };
-            const size = state.windowSizes[appId] || { width: 800, height: 500 };
+            const isFocused = focusedWindow === appId;
+            const position = windowPositions[appId] || { x: 50, y: 50 };
+            const size = windowSizes[appId] || { width: 800, height: 500 };
             const canResize = app.canResize !== false;
-            const isMaximized = state.maximizedWindows.includes(appId);
             
-            return (
+              return (
               <motion.div
                 key={appId}
                 data-window-id={appId}
-                className={`absolute ${themeStyles[state.theme].window} overflow-hidden draggable-window
+                className={`absolute ${themeStyles[theme].window} overflow-hidden draggable-window
                   ${isFocused ? 'z-20 shadow-2xl' : 'z-10 shadow-lg'}
-                  ${isMaximized ? 'window-maximized' : 'rounded-lg window-transition'}
-                  ${dragStartPosition ? 'window-dragging' : ''}
-                  ${state.transparencyEnabled ? 'bg-opacity-90' : ''}`}
+                  ${maximizedWindows.includes(appId) ? 'window-maximized' : 'rounded-lg window-transition'}
+                  ${dragStartPosition ? 'window-dragging' : ''}`}
                 style={{ 
-                  top: isMaximized ? 0 : position.y,
-                  left: isMaximized ? 0 : position.x,
-                  width: isMaximized ? '100%' : size.width,
-                  height: isMaximized ? `calc(100% - ${state.taskbarPosition === 'bottom' ? '48px' : '0px'})` : size.height,
-                  border: isFocused ? '1px solid rgba(255,255,255,0.1)' : '1px solid rgba(0,0,0,0.2)'
+                  top: maximizedWindows.includes(appId) ? 0 : position.y,
+                  left: maximizedWindows.includes(appId) ? 0 : position.x,
+                  width: size.width,
+                  height: size.height,
+                  border: isFocused ? '1px solid rgba(255,255,255,0.1)' : '1px solid rgba(0,0,0,0.2)',
+                  transformOrigin: animatingMaximize === appId ? 'center center' : 'top left'
                 }}
-                initial={state.animationEnabled ? { scale: 0.5, opacity: 0 } : false}
-                animate={state.animationEnabled ? { scale: 1, opacity: 1 } : false}
-                exit={state.animationEnabled ? { scale: 0.5, opacity: 0 } : false}
-                transition={state.animationEnabled ? { type: "spring", stiffness: 500, damping: 30 } : false}
-                onClick={() => setState(prev => ({ ...prev, focusedWindow: appId }))}
-                drag={!isMaximized}
-                dragMomentum={false}
-                onDragStart={(e) => handleDragStart(e, appId)}
-                onDrag={(e) => handleDrag(e, appId)}
-                onDragEnd={handleDragEnd}
-                dragConstraints={{
-                  left: 0,
-                  right: window.innerWidth - size.width,
-                  top: 0,
-                  bottom: window.innerHeight - size.height - (state.taskbarPosition === 'bottom' ? 48 : 0)
-                }}
+                layout
+                initial={{ scale: animatingMaximize === appId ? 0.8 : 0.5, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.5, opacity: 0 }}
+                onClick={() => setFocusedWindow(appId)}
               >
                 <WindowTitleBar
                   app={app}
                   appId={appId}
                   isFocused={isFocused}
-                  isMaximized={isMaximized}
+                  isMaximized={maximizedWindows.includes(appId)}
                   onMinimize={(e) => minimizeWindow(e, appId)}
                   onMaximize={(e) => maximizeWindow(e, appId)}
                   onClose={(e) => closeWindow(e, appId)}
-                  theme={state.theme}
-                  accentColor={state.accentColor}
+                  onTitleMouseDown={(e) => handleDragStart(e, appId)}
+                  theme={theme}
                 />
                 
                 <div 
                   className="window-content overflow-hidden" 
                   style={{ 
-                    height: isMaximized 
-                      ? `calc(100% - 40px)` 
-                      : size.height - 40,
-                    backgroundColor: themeStyles[state.theme].window.includes('bg-[#f5f5f5]') 
-                      ? '#f5f5f5' 
-                      : '#2a2b2e'
+                    height: size.height - 40,
+                    backgroundColor: theme === 'light' ? '#f5f5f5' : '#2a2b2e'
                   }}
                 >
-                  {React.createElement(app.component, {
-                    theme: state.theme,
-                    onOpenFile: (file) => {
-                      if (file.type === 'image') {
-                        setState(prev => ({
-                          ...prev,
-                          selectedImage: file
-                        }));
-                        openWindow(9); // Open Photo Viewer
-                      } else {
-                        // Handle other file types
-                        addNotification('File Opened', `Opening ${file.name}`, '📄');
-                      }
-                    },
-                    onContextMenu: handleFileContextMenu,
-                    fileView: state.fileExplorerView,
-                    accentColor: state.accentColor
-                  })}
+                  {app.content || (
+                    <div className="flex items-center justify-center h-full">
+                      <p className={theme === 'light' ? 'text-black/50' : 'text-white/50'}>
+                        Content for {app.name} is under development
+                      </p>
+                    </div>
+                  )}
                 </div>
                 
                 {/* Resize handles */}
-                {canResize && !isMaximized && (
+                {canResize && !maximizedWindows.includes(appId) && (
                   <>
                     <div 
                       className="resize-handle resize-handle-right" 
@@ -1091,554 +949,182 @@ const DesktopOS = () => {
         </AnimatePresence>
 
         {/* Taskbar */}
-        <div 
-          className={`taskbar fixed ${state.taskbarPosition === 'bottom' ? 'bottom-0 left-0 right-0 h-12' : 
-            state.taskbarPosition === 'top' ? 'top-0 left-0 right-0 h-12' :
-            state.taskbarPosition === 'left' ? 'top-0 left-0 bottom-0 w-12 flex-col' :
-            'top-0 right-0 bottom-0 w-12 flex-col'} 
-          ${themeStyles[state.theme].taskbar} backdrop-blur-md border-t ${themeStyles[state.theme].border} flex items-center px-2 z-50`}
-          ref={taskbarRef}
-          onContextMenu={handleTaskbarContextMenu}
-        >
+        <div className={`taskbar fixed bottom-0 left-0 right-0 ${compactMode ? 'h-10' : 'h-12'} ${themeStyles[theme].taskbar} backdrop-blur-md border-t ${
+          theme === 'light' ? 'border-black/10' : 'border-white/10'
+        } flex items-center px-2 z-50`}>
           {/* Start Button */}
           <motion.button
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-md h-10 ${
-              state.isStartMenuOpen ? themeStyles[state.theme].active : themeStyles[state.theme].hover
-            } start-button`}
+            className={`flex items-center gap-2 ${compactMode ? 'px-2 py-1 rounded-md h-8' : 'px-3 py-1.5 rounded-md h-10'} ${
+              isStartMenuOpen ? (theme === 'light' ? 'bg-black/10' : 'bg-white/20') : (theme === 'light' ? 'hover:bg-black/10' : 'hover:bg-white/10')
+            }`}
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
-            onClick={() => setState(prev => ({ ...prev, isStartMenuOpen: !prev.isStartMenuOpen }))}
+            onClick={() => setIsStartMenuOpen(!isStartMenuOpen)}
           >
             <span className="text-2xl">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                <circle cx="12" cy="12" r="9" strokeOpacity="0.3" stroke={themeStyles[state.theme].window === 'bg-[#f5f5f5] text-black' ? 'black' : 'white'}/>
-                <circle cx="12" cy="12" r="6.5" strokeOpacity="0.5" stroke={themeStyles[state.theme].window === 'bg-[#f5f5f5] text-black' ? 'black' : 'white'}/>
-                <circle cx="12" cy="12" r="2.5" fill={themeStyles[state.theme].window === 'bg-[#f5f5f5] text-black' ? 'black' : 'white'} />
-                <circle cx="17" cy="12" r="0.7" fill={themeStyles[state.theme].window === 'bg-[#f5f5f5] text-black' ? 'black' : 'white'} />
-                <circle cx="7" cy="12" r="0.7" fill={themeStyles[state.theme].window === 'bg-[#f5f5f5] text-black' ? 'black' : 'white'} />
+              <svg xmlns="http://www.w3.org/2000/svg" className={`${compactMode ? 'h-5 w-5' : 'h-6 w-6'}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <circle cx="12" cy="12" r="9" strokeOpacity="0.3" stroke={theme === 'light' ? 'black' : 'white'}/>
+                <circle cx="12" cy="12" r="6.5" strokeOpacity="0.5" stroke={theme === 'light' ? 'black' : 'white'}/>
+                <circle cx="12" cy="12" r="2.5" fill={theme === 'light' ? 'black' : 'white'} />
+                <circle cx="17" cy="12" r="0.7" fill={theme === 'light' ? 'black' : 'white'} />
+                <circle cx="7" cy="12" r="0.7" fill={theme === 'light' ? 'black' : 'white'} />
               </svg>
             </span>
           </motion.button>
 
           {/* Search Bar in Taskbar */}
-          {state.taskbarPosition === 'bottom' || state.taskbarPosition === 'top' ? (
-            <div className="ml-3 w-64">
-              <input
-                type="text"
-                placeholder="Search..."
-                className={`w-full px-3 py-1 rounded-md ${
-                  themeStyles[state.theme].window === 'bg-[#f5f5f5] text-black' 
-                    ? 'bg-black/10 focus:ring-black/30 placeholder-black/50' 
-                    : 'bg-white/10 focus:ring-white/30 placeholder-white/50'
-                } focus:outline-none focus:ring-2`}
-                value={state.searchQuery}
-                onChange={(e) => setState(prev => ({ ...prev, searchQuery: e.target.value }))}
-              />
-            </div>
-          ) : null}
+          <div className={`ml-3 ${compactMode ? 'w-40' : 'w-64'}`}>
+            <input
+              type="text"
+              placeholder="Search..."
+              className={`w-full px-3 py-1 rounded-md ${
+                theme === 'light' ? 'bg-black/10 focus:ring-black/30 placeholder-black/50' : 'bg-white/10 focus:ring-white/30 placeholder-white/50'
+              } focus:outline-none focus:ring-2`}
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </div>
 
           {/* Task View Button */}
           <motion.button
-            className={`ml-2 p-2 rounded-md ${themeStyles[state.theme].hover}`}
+            className={`ml-2 ${compactMode ? 'p-1' : 'p-2'} rounded-md ${
+              theme === 'light' ? 'hover:bg-black/10' : 'hover:bg-white/10'
+            }`}
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
             onClick={toggleShowDesktop}
             title="Show desktop"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+            <svg xmlns="http://www.w3.org/2000/svg" className={`${compactMode ? 'h-4 w-4' : 'h-5 w-5'}`} viewBox="0 0 20 20" fill="currentColor">
               <path fillRule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clipRule="evenodd" />
             </svg>
           </motion.button>
 
           {/* Arrange Windows Buttons */}
-          {state.taskbarPosition === 'bottom' || state.taskbarPosition === 'top' ? (
-            <div className="ml-2 flex">
-              <motion.button
-                className={`p-2 rounded-md ${themeStyles[state.theme].hover}`}
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={() => arrangeWindows('cascade')}
-                title="Cascade windows"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                  <path d="M5 3a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2V5a2 2 0 00-2-2H5zM5 11a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2v-2a2 2 0 00-2-2H5zM11 5a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V5zM14 11a1 1 0 011 1v1h1a1 1 0 110 2h-1v1a1 1 0 11-2 0v-1h-1a1 1 0 110-2h1v-1a1 1 0 011-1z" />
-                </svg>
-              </motion.button>
-              <motion.button
-                className={`p-2 rounded-md ${themeStyles[state.theme].hover}`}
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={() => arrangeWindows('stack')}
-                title="Stack windows"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                  <path d="M5 3a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2V5a2 2 0 00-2-2H5zM5 11a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2v-2a2 2 0 00-2-2H5zM11 5a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V5zM11 13a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
-                </svg>
-              </motion.button>
-              <motion.button
-                className={`p-2 rounded-md ${themeStyles[state.theme].hover}`}
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={() => arrangeWindows('side-by-side')}
-                title="Side by side"
-                disabled={state.activeWindows.filter(id => !state.minimizedWindows.includes(id)).length !== 2}
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 0v12h8V4H6z" clipRule="evenodd" />
-                </svg>
-              </motion.button>
-            </div>
-          ) : null}
+          <div className="ml-2 flex">
+            <motion.button
+              className={`${compactMode ? 'p-1' : 'p-2'} rounded-md ${
+                theme === 'light' ? 'hover:bg-black/10' : 'hover:bg-white/10'
+              }`}
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => arrangeWindows('cascade')}
+              title="Cascade windows"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className={`${compactMode ? 'h-4 w-4' : 'h-5 w-5'}`} viewBox="0 0 20 20" fill="currentColor">
+                <path d="M5 3a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2V5a2 2 0 00-2-2H5zM5 11a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2v-2a2 2 0 00-2-2H5zM11 5a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V5zM14 11a1 1 0 011 1v1h1a1 1 0 110 2h-1v1a1 1 0 11-2 0v-1h-1a1 1 0 110-2h1v-1a1 1 0 011-1z" />
+              </svg>
+            </motion.button>
+            <motion.button
+              className={`${compactMode ? 'p-1' : 'p-2'} rounded-md ${
+                theme === 'light' ? 'hover:bg-black/10' : 'hover:bg-white/10'
+              }`}
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => arrangeWindows('stack')}
+              title="Stack windows"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                <path d="M5 3a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2V5a2 2 0 00-2-2H5zM5 11a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2v-2a2 2 0 00-2-2H5zM11 5a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V5zM11 13a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+              </svg>
+            </motion.button>
+            <motion.button
+              className={`p-2 rounded-md ${
+                theme === 'light' ? 'hover:bg-black/10' : 'hover:bg-white/10'
+              }`}
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => arrangeWindows('side-by-side')}
+              title="Side by side"
+              disabled={activeWindows.filter(id => !minimizedWindows.includes(id)).length !== 2}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className={`${compactMode ? 'h-4 w-4' : 'h-5 w-5'}`} viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 0v12h8V4H6z" clipRule="evenodd" />
+              </svg>
+            </motion.button>
+          </div>
 
           {/* Active Apps */}
-          <div className={`flex-1 flex ${state.taskbarPosition === 'left' || state.taskbarPosition === 'right' ? 'flex-col' : ''} items-center gap-1 px-2`}>
-            {state.activeWindows.map(appId => {
+          <div className="flex-1 flex items-center gap-1 px-2">
+            {activeWindows.map(appId => {
               const app = apps.find(a => a.id === appId);
-              const isFocused = state.focusedWindow === appId;
-              const isMinimized = state.minimizedWindows.includes(appId);
+              const isFocused = focusedWindow === appId;
+              const isMinimized = minimizedWindows.includes(appId);
 
               return (
                 <motion.button
                   key={appId}
                   className={`flex items-center gap-2 px-3 h-10 rounded-md ${
-                    isFocused ? themeStyles[state.theme].active : 
-                    isMinimized ? (themeStyles[state.theme].window === 'bg-[#f5f5f5] text-black' ? 'opacity-50 hover:opacity-100 hover:bg-black/10' : 'opacity-50 hover:opacity-100 hover:bg-white/10') : 
-                    themeStyles[state.theme].hover
+                    isFocused ? (theme === 'light' ? 'bg-black/20' : 'bg-white/20') : 
+                    isMinimized ? (theme === 'light' ? 'opacity-50 hover:opacity-100 hover:bg-black/10' : 'opacity-50 hover:opacity-100 hover:bg-white/10') : 
+                    (theme === 'light' ? 'hover:bg-black/10' : 'hover:bg-white/10')
                   }`}
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
                   onClick={() => openWindow(appId)}
                 >
                   <span>{app.icon}</span>
-                  {(state.taskbarPosition === 'bottom' || state.taskbarPosition === 'top') && (
-                    <span className={`text-sm ${
-                      themeStyles[state.theme].window === 'bg-[#f5f5f5] text-black' ? 'text-black/90' : 'text-white/90'
-                    }`}>{app.name}</span>
-                  )}
+                  <span className={`${compactMode ? 'text-xs' : 'text-sm'} ${
+                    theme === 'light' ? 'text-black/90' : 'text-white/90'
+                  }`}>{app.name}</span>
                 </motion.button>
               );
             })}
           </div>
 
           {/* System Tray */}
-          <div className={`flex ${state.taskbarPosition === 'left' || state.taskbarPosition === 'right' ? 'flex-col' : ''} items-center gap-4 px-4`}>
-            {/* Network Status */}
+          <div className="flex items-center gap-4 px-4">
             <div className="relative">
               <motion.button
-                className={`p-1 rounded-md ${themeStyles[state.theme].hover} network-button`}
+                className={`p-1 rounded-md ${
+                  theme === 'light' ? 'hover:bg-black/10' : 'hover:bg-white/10'
+                }`}
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
-                onClick={() => setShowNetworkControl(!showNetworkControl)}
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                  {state.networkStatus === 'connected' ? (
-                    <path fillRule="evenodd" d="M5.05 3.636a1 1 0 010 1.414 7 7 0 000 9.9 1 1 0 11-1.414 1.414 9 9 0 010-12.728 1 1 0 011.414 0zm9.9 0a1 1 0 011.414 0 9 9 0 010 12.728 1 1 0 11-1.414-1.414 7 7 0 000-9.9 1 1 0 010-1.414zM7.879 6.464a1 1 0 010 1.414 3 3 0 000 4.243 1 1 0 11-1.415 1.414 5 5 0 010-7.07 1 1 0 011.415 0zm4.242 0a1 1 0 011.415 0 5 5 0 010 7.07 1 1 0 01-1.415-1.414 3 3 0 000-4.243 1 1 0 010-1.414zM10 9a1 1 0 011 1v.01a1 1 0 11-2 0V10a1 1 0 011-1z" clipRule="evenodd" />
-                  ) : (
-                    <path fillRule="evenodd" d="M2.28 3.06a1 1 0 011.415 0L6.05 5.83a7.028 7.028 0 012.196-.646 1 1 0 11.262 1.99 5.03 5.03 0 00-1.572.48l1.414 1.414a3.029 3.029 0 011.572-.48 1 1 0 11.262 1.99 1.03 1.03 0 00-.33.123l1.456 1.456a1 1 0 01-1.414 1.414L2.28 4.475a1 1 0 010-1.414zM5.724 7.638a1 1 0 011.39-.278c.19.127.322.3.386.498a1 1 0 11-1.885.666 1 1 0 01.11-.886zm3.114 4.335a1 1 0 01-1.414-1.414l1.414-1.414a1 1 0 011.414 1.414l-1.414 1.414zm-6.028-6.028a1 1 0 01-1.414-1.414l1.414-1.414a1 1 0 011.414 1.414l-1.414 1.414zM10 13a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
-                  )}
-                </svg>
-              </motion.button>
-              
-              {showNetworkControl && (
-                <motion.div
-                  className={`absolute ${state.taskbarPosition === 'bottom' ? 'bottom-10 right-0' : 'top-10 right-0'} w-64 p-4 rounded-md shadow-lg ${
-                    themeStyles[state.theme].window === 'bg-[#f5f5f5] text-black' ? 'bg-white border border-gray-200' : 'bg-gray-800 border border-gray-700'
-                  } z-50`}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: 10 }}
-                >
-                  <h3 className="font-medium mb-2">Network</h3>
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span>Wi-Fi</span>
-                      <button 
-                        className={`px-3 py-1 rounded-md ${state.networkStatus === 'connected' ? 'bg-green-500' : 'bg-gray-500'}`}
-                        onClick={() => setState(prev => ({
-                          ...prev,
-                          networkStatus: prev.networkStatus === 'connected' ? 'disconnected' : 'connected'
-                        }))}
-                      >
-                        {state.networkStatus === 'connected' ? 'Connected' : 'Disconnected'}
-                      </button>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span>Airplane Mode</span>
-                      <button className="px-3 py-1 bg-gray-500 rounded-md">Off</button>
-                    </div>
-                    <div className="pt-2">
-                      <button 
-                        className={`w-full text-left px-3 py-1 rounded-md ${themeStyles[state.theme].hover}`}
-                        onClick={() => openWindow(3)}
-                      >
-                        Network Settings
-                      </button>
-                    </div>
-                  </div>
-                </motion.div>
-              )}
-            </div>
-            
-            {/* Volume Control */}
-            <div className="relative">
-              <motion.button
-                className={`p-1 rounded-md ${themeStyles[state.theme].hover} volume-button`}
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={() => setShowVolumeControl(!showVolumeControl)}
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                  {state.volume === 0 ? (
-                    <path fillRule="evenodd" d="M9.383 3.076A1 1 0 0110 4v12a1 1 0 01-1.707.707L4.586 13H2a1 1 0 01-1-1V8a1 1 0 011-1h2.586l3.707-3.707a1 1 0 011.09-.217zM12.293 7.293a1 1 0 011.414 0L15 8.586l1.293-1.293a1 1 0 111.414 1.414L16.414 10l1.293 1.293a1 1 0 01-1.414 1.414L15 11.414l-1.293 1.293a1 1 0 01-1.414-1.414L13.586 10l-1.293-1.293a1 1 0 010-1.414z" clipRule="evenodd" />
-                  ) : state.volume < 50 ? (
-                    <path fillRule="evenodd" d="M9.383 3.076A1 1 0 0110 4v12a1 1 0 01-1.707.707L4.586 13H2a1 1 0 01-1-1V8a1 1 0 011-1h2.586l3.707-3.707a1 1 0 011.09-.217zM12 9a1 1 0 100 2V9z" clipRule="evenodd" />
-                  ) : (
-                    <path fillRule="evenodd" d="M9.383 3.076A1 1 0 0110 4v12a1 1 0 01-1.707.707L4.586 13H2a1 1 0 01-1-1V8a1 1 0 011-1h2.586l3.707-3.707a1 1 0 011.09-.217zM14.657 2.929a1 1 0 011.414 0A9.972 9.972 0 0119 10a9.972 9.972 0 01-2.929 7.071 1 1 0 01-1.414-1.414A7.971 7.971 0 0017 10c0-2.21-.894-4.208-2.343-5.657a1 1 0 010-1.414zm-2.829 2.828a1 1 0 011.415 0A5.983 5.983 0 0115 10a5.984 5.984 0 01-1.757 4.243 1 1 0 01-1.415-1.415A3.984 3.984 0 0013 10a3.983 3.983 0 00-1.172-2.828 1 1 0 010-1.415z" clipRule="evenodd" />
-                  )}
-                </svg>
-              </motion.button>
-              
-              {showVolumeControl && (
-                <motion.div
-                  className={`absolute ${state.taskbarPosition === 'bottom' ? 'bottom-10 right-0' : 'top-10 right-0'} w-64 p-4 rounded-md shadow-lg ${
-                    themeStyles[state.theme].window === 'bg-[#f5f5f5] text-black' ? 'bg-white border border-gray-200' : 'bg-gray-800 border border-gray-700'
-                  } z-50`}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: 10 }}
-                >
-                  <h3 className="font-medium mb-2">Volume</h3>
-                  <input 
-                    type="range" 
-                    min="0" 
-                    max="100" 
-                    value={state.volume}
-                    onChange={(e) => setState(prev => ({ ...prev, volume: parseInt(e.target.value) }))}
-                    className="w-full"
-                  />
-                  <div className="flex justify-between mt-2">
-                    <button 
-                      className={`px-3 py-1 rounded-md ${themeStyles[state.theme].hover}`}
-                      onClick={() => setState(prev => ({ ...prev, volume: Math.max(0, prev.volume - 10) }))}
-                    >
-                      -
-                    </button>
-                    <span>{state.volume}%</span>
-                    <button 
-                      className={`px-3 py-1 rounded-md ${themeStyles[state.theme].hover}`}
-                      onClick={() => setState(prev => ({ ...prev, volume: Math.min(100, prev.volume + 10) }))}
-                    >
-                      +
-                    </button>
-                  </div>
-                </motion.div>
-              )}
-            </div>
-            
-            {/* Battery Status */}
-            <div className="relative">
-              <motion.button
-                className={`p-1 rounded-md ${themeStyles[state.theme].hover} battery-button`}
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={() => setShowBatteryInfo(!showBatteryInfo)}
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M3 5a2 2 0 012-2h10a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V5zm11 1H6v8h8V6z" clipRule="evenodd" />
-                  {state.batteryLevel > 80 ? (
-                    <path fillRule="evenodd" d="M3 5a2 2 0 012-2h10a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V5zm11 1H6v8h8V6z" clipRule="evenodd" />
-                  ) : state.batteryLevel > 60 ? (
-                    <path fillRule="evenodd" d="M3 5a2 2 0 012-2h10a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V5zm11 1H6v8h4V6h4z" clipRule="evenodd" />
-                  ) : state.batteryLevel > 40 ? (
-                    <path fillRule="evenodd" d="M3 5a2 2 0 012-2h10a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V5zm11 1H6v8h2V6h6z" clipRule="evenodd" />
-                  ) : (
-                    <path fillRule="evenodd" d="M3 5a2 2 0 012-2h10a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V5zm11 1H6v8h1V6h7z" clipRule="evenodd" />
-                  )}
-                </svg>
-              </motion.button>
-              
-              {showBatteryInfo && (
-                <motion.div
-                  className={`absolute ${state.taskbarPosition === 'bottom' ? 'bottom-10 right-0' : 'top-10 right-0'} w-64 p-4 rounded-md shadow-lg ${
-                    themeStyles[state.theme].window === 'bg-[#f5f5f5] text-black' ? 'bg-white border border-gray-200' : 'bg-gray-800 border border-gray-700'
-                  } z-50`}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: 10 }}
-                >
-                  <h3 className="font-medium mb-2">Battery</h3>
-                  <div className="flex items-center gap-3">
-                    <div className="w-16 h-8 border rounded flex items-center p-0.5">
-                      <div 
-                        className={`h-full rounded-sm ${state.batteryLevel > 20 ? 'bg-green-500' : 'bg-red-500'}`}
-                        style={{ width: `${state.batteryLevel}%` }}
-                      />
-                    </div>
-                    <span>{state.batteryLevel}%</span>
-                    {state.isCharging && <span className="text-sm">Charging</span>}
-                  </div>
-                  <div className="mt-2">
-                    <button 
-                      className={`w-full text-left px-3 py-1 rounded-md ${themeStyles[state.theme].hover}`}
-                      onClick={() => setState(prev => ({ ...prev, isCharging: !prev.isCharging }))}
-                    >
-                      {state.isCharging ? 'Stop Charging' : 'Start Charging'}
-                    </button>
-                  </div>
-                </motion.div>
-              )}
-            </div>
-            
-            {/* Clock and Calendar */}
-            <div className="relative">
-              <motion.button
-                className={`p-1 rounded-md ${themeStyles[state.theme].hover} clock-button`}
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={() => setShowClockCalendar(!showClockCalendar)}
-              >
-                <span className={`text-sm ${
-                  themeStyles[state.theme].window === 'bg-[#f5f5f5] text-black' ? 'text-black/90' : 'text-white/90'
-                }`}>{state.currentTime}</span>
-              </motion.button>
-              
-              {showClockCalendar && (
-                <motion.div
-                  className={`absolute ${state.taskbarPosition === 'bottom' ? 'bottom-10 right-0' : 'top-10 right-0'} w-64 p-4 rounded-md shadow-lg ${
-                    themeStyles[state.theme].window === 'bg-[#f5f5f5] text-black' ? 'bg-white border border-gray-200' : 'bg-gray-800 border border-gray-700'
-                  } z-50`}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: 10 }}
-                >
-                  <h3 className="font-medium mb-2 text-center">
-                    {new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}
-                  </h3>
-                  <div className="text-center text-2xl font-bold mb-4">
-                    {state.currentTime}
-                  </div>
-                  <div className="grid grid-cols-7 gap-1 text-center">
-                    {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map(day => (
-                      <div key={day} className="text-xs font-medium">{day}</div>
-                    ))}
-                    {Array.from({ length: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate() }).map((_, i) => (
-                      <div 
-                        key={i} 
-                        className={`p-1 text-xs rounded-full ${i + 1 === new Date().getDate() ? 'bg-blue-500 text-white' : ''}`}
-                      >
-                        {i + 1}
-                      </div>
-                    ))}
-                  </div>
-                  <div className="mt-4">
-                    <button 
-                      className={`w-full text-left px-3 py-1 rounded-md ${themeStyles[state.theme].hover}`}
-                      onClick={() => openWindow(8)}
-                    >
-                      Open Calendar
-                    </button>
-                  </div>
-                </motion.div>
-              )}
-            </div>
-            
-            {/* Notification Center */}
-            <div className="relative">
-              <motion.button
-                className={`p-1 rounded-md ${themeStyles[state.theme].hover} notification-center-button`}
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={() => setShowNotificationCenter(!showNotificationCenter)}
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                  <path d="M10 2a6 6 0 00-6 6v3.586l-.707.707A1 1 0 004 14h12a1 1 0 00.707-1.707L16 11.586V8a6 6 0 00-6-6zM10 18a3 3 0 01-3-3h6a3 3 0 01-3 3z" />
-                  {state.notifications.some(n => !n.read) && (
-                    <circle cx="16" cy="4" r="4" fill="red" />
-                  )}
-                </svg>
-              </motion.button>
-              
-              {showNotificationCenter && (
-                <motion.div
-                  ref={notificationCenterRef}
-                  className={`absolute ${state.taskbarPosition === 'bottom' ? 'bottom-10 right-0' : 'top-10 right-0'} w-80 h-96 rounded-md shadow-lg ${
-                    themeStyles[state.theme].window === 'bg-[#f5f5f5] text-black' ? 'bg-white border border-gray-200' : 'bg-gray-800 border border-gray-700'
-                  } z-50 flex flex-col`}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: 10 }}
-                >
-                  <div className="p-3 border-b flex justify-between items-center">
-                    <h3 className="font-medium">Notifications</h3>
-                    <button 
-                      className="text-sm"
-                      onClick={clearAllNotifications}
-                    >
-                      Clear all
-                    </button>
-                  </div>
-                  <div className="flex-1 overflow-y-auto">
-                    {state.notifications.length > 0 ? (
-                      state.notifications.map(notification => (
-                        <div 
-                          key={notification.id}
-                          className={`p-3 border-b ${!notification.read ? 'bg-blue-500/10' : ''}`}
-                          onClick={() => markNotificationAsRead(notification.id)}
-                        >
-                          <div className="flex items-start gap-2">
-                            <span className="text-lg">{notification.icon}</span>
-                            <div>
-                              <div className="font-medium">{notification.title}</div>
-                              <div className="text-sm">{notification.message}</div>
-                              <div className="text-xs opacity-50 mt-1">{notification.time}</div>
-                            </div>
-                          </div>
-                        </div>
-                      ))
-                    ) : (
-                      <div className="flex items-center justify-center h-full text-gray-500">
-                        No notifications
-                      </div>
-                    )}
-                  </div>
-                </motion.div>
-              )}
-            </div>
-            
-            {/* Action Center */}
-            <div className="relative">
-              <motion.button
-                className={`p-1 rounded-md ${themeStyles[state.theme].hover} action-center-button`}
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={() => setShowActionCenter(!showActionCenter)}
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd" />
-                </svg>
-              </motion.button>
-              
-              {showActionCenter && (
-                <motion.div
-                  ref={actionCenterRef}
-                  className={`absolute ${state.taskbarPosition === 'bottom' ? 'bottom-10 right-0' : 'top-10 right-0'} w-80 rounded-md shadow-lg ${
-                    themeStyles[state.theme].window === 'bg-[#f5f5f5] text-black' ? 'bg-white border border-gray-200' : 'bg-gray-800 border border-gray-700'
-                  } z-50 p-3`}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: 10 }}
-                >
-                  <h3 className="font-medium mb-3">Quick Settings</h3>
-                  <div className="grid grid-cols-4 gap-3">
-                    <button 
-                      className={`flex flex-col items-center p-2 rounded-md ${themeStyles[state.theme].hover}`}
-                      onClick={toggleShowDesktop}
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" viewBox="0 0 20 20" fill="currentColor">
-                        <path fillRule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clipRule="evenodd" />
-                      </svg>
-                      <span className="text-xs mt-1">Desktop</span>
-                    </button>
-                    <button 
-                      className={`flex flex-col items-center p-2 rounded-md ${themeStyles[state.theme].hover}`}
-                      onClick={() => setState(prev => ({ ...prev, networkStatus: prev.networkStatus === 'connected' ? 'disconnected' : 'connected' }))}
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" viewBox="0 0 20 20" fill="currentColor">
-                        {state.networkStatus === 'connected' ? (
-                          <path fillRule="evenodd" d="M17.778 8.222c-4.296-4.296-11.26-4.296-15.556 0A1 1 0 01.808 6.808c5.076-5.077 13.308-5.077 18.384 0a1 1 0 01-1.414 1.414zM14.95 11.05a7 7 0 00-9.9 0 1 1 0 01-1.414-1.414 9 9 0 0112.728 0 1 1 0 01-1.414 1.414zM12.12 13.88a3 3 0 00-4.242 0 1 1 0 01-1.415-1.415 5 5 0 017.072 0 1 1 0 01-1.415 1.415zM9 16a1 1 0 011-1h.01a1 1 0 110 2H10a1 1 0 01-1-1z" clipRule="evenodd" />
-                        ) : (
-                          <path fillRule="evenodd" d="M2.28 3.06a1 1 0 011.415 0L6.05 5.83a7.028 7.028 0 012.196-.646 1 1 0 11.262 1.99 5.03 5.03 0 00-1.572.48l1.414 1.414a3.029 3.029 0 011.572-.48 1 1 0 11.262 1.99 1.03 1.03 0 00-.33.123l1.456 1.456a1 1 0 01-1.414 1.414L2.28 4.475a1 1 0 010-1.414zM5.724 7.638a1 1 0 011.39-.278c.19.127.322.3.386.498a1 1 0 11-1.885.666 1 1 0 01.11-.886zm3.114 4.335a1 1 0 01-1.414-1.414l1.414-1.414a1 1 0 011.414 1.414l-1.414 1.414zm-6.028-6.028a1 1 0 01-1.414-1.414l1.414-1.414a1 1 0 011.414 1.414l-1.414 1.414zM10 13a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
-                        )}
-                      </svg>
-                      <span className="text-xs mt-1">Wi-Fi</span>
-                    </button>
-                    <button 
-                      className={`flex flex-col items-center p-2 rounded-md ${themeStyles[state.theme].hover}`}
-                      onClick={() => setState(prev => ({ ...prev, volume: prev.volume === 0 ? 70 : 0 }))}
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" viewBox="0 0 20 20" fill="currentColor">
-                        {state.volume === 0 ? (
-                          <path fillRule="evenodd" d="M9.383 3.076A1 1 0 0110 4v12a1 1 0 01-1.707.707L4.586 13H2a1 1 0 01-1-1V8a1 1 0 011-1h2.586l3.707-3.707a1 1 0 011.09-.217zM12.293 7.293a1 1 0 011.414 0L15 8.586l1.293-1.293a1 1 0 111.414 1.414L16.414 10l1.293 1.293a1 1 0 01-1.414 1.414L15 11.414l-1.293 1.293a1 1 0 01-1.414-1.414L13.586 10l-1.293-1.293a1 1 0 010-1.414z" clipRule="evenodd" />
-                        ) : (
-                          <path fillRule="evenodd" d="M9.383 3.076A1 1 0 0110 4v12a1 1 0 01-1.707.707L4.586 13H2a1 1 0 01-1-1V8a1 1 0 011-1h2.586l3.707-3.707a1 1 0 011.09-.217zM14.657 2.929a1 1 0 011.414 0A9.972 9.972 0 0119 10a9.972 9.972 0 01-2.929 7.071 1 1 0 01-1.414-1.414A7.971 7.971 0 0017 10c0-2.21-.894-4.208-2.343-5.657a1 1 0 010-1.414zm-2.829 2.828a1 1 0 011.415 0A5.983 5.983 0 0115 10a5.984 5.984 0 01-1.757 4.243 1 1 0 01-1.415-1.415A3.984 3.984 0 0013 10a3.983 3.983 0 00-1.172-2.828 1 1 0 010-1.415z" clipRule="evenodd" />
-                        )}
-                      </svg>
-                      <span className="text-xs mt-1">{state.volume === 0 ? 'Mute' : 'Sound'}</span>
-                    </button>
-                    <button 
-                      className={`flex flex-col items-center p-2 rounded-md ${themeStyles[state.theme].hover}`}
-                      onClick={() => setState(prev => ({ ...prev, theme: prev.theme === 'dark' ? 'light' : 'dark' }))}
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" viewBox="0 0 20 20" fill="currentColor">
-                        {state.theme === 'dark' ? (
-                          <path fillRule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z" clipRule="evenodd" />
-                        ) : (
-                          <path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z" />
-                        )}
-                      </svg>
-                      <span className="text-xs mt-1">{state.theme === 'dark' ? 'Light' : 'Dark'}</span>
-                    </button>
-                  </div>
-                  <div className="mt-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <span>Brightness</span>
-                      <span>{state.brightness}%</span>
-                    </div>
-                    <input 
-                      type="range" 
-                      min="0" 
-                      max="100" 
-                      value={state.brightness}
-                      onChange={(e) => setState(prev => ({ ...prev, brightness: parseInt(e.target.value) }))}
-                      className="w-full"
-                    />
-                  </div>
-                </motion.div>
-              )}
-            </div>
-            
-            {/* Power Options */}
-            <div className="relative">
-              <motion.button
-                className={`p-1 rounded-md ${themeStyles[state.theme].hover}`}
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={() => setState(prev => ({ ...prev, showPowerOptions: !prev.showPowerOptions }))}
+                onClick={() => setShowPowerOptions(!showPowerOptions)}
               >
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                   <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
                 </svg>
               </motion.button>
               
-              {state.showPowerOptions && (
+              {showPowerOptions && (
                 <motion.div
-                  className={`absolute ${state.taskbarPosition === 'bottom' ? 'bottom-10 right-0' : 'top-10 right-0'} w-48 py-1 rounded-md shadow-lg ${
-                    themeStyles[state.theme].window === 'bg-[#f5f5f5] text-black' ? 'bg-white border border-gray-200' : 'bg-gray-800 border border-gray-700'
+                  className={`absolute bottom-10 right-0 ${compactMode ? 'w-40' : 'w-48'} py-1 rounded-md shadow-lg ${
+                    theme === 'light' ? 'bg-white border border-gray-200' : 'bg-gray-800 border border-gray-700'
                   } z-50`}
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: 10 }}
                 >
                   <button
-                    className={`block w-full text-left px-4 py-2 text-sm ${themeStyles[state.theme].hover}`}
+                    className={`block w-full text-left px-4 py-2 text-sm ${
+                      theme === 'light' ? 'hover:bg-gray-100' : 'hover:bg-gray-700'
+                    }`}
                     onClick={() => handlePowerAction('shutdown')}
                   >
                     Shut down
                   </button>
                   <button
-                    className={`block w-full text-left px-4 py-2 text-sm ${themeStyles[state.theme].hover}`}
+                    className={`block w-full text-left px-4 py-2 text-sm ${
+                      theme === 'light' ? 'hover:bg-gray-100' : 'hover:bg-gray-700'
+                    }`}
                     onClick={() => handlePowerAction('restart')}
                   >
                     Restart
                   </button>
                   <button
-                    className={`block w-full text-left px-4 py-2 text-sm ${themeStyles[state.theme].hover}`}
+                    className={`block w-full text-left px-4 py-2 text-sm ${
+                      theme === 'light' ? 'hover:bg-gray-100' : 'hover:bg-gray-700'
+                    }`}
                     onClick={() => handlePowerAction('sleep')}
                   >
                     Sleep
                   </button>
                   <button
-                    className={`block w-full text-left px-4 py-2 text-sm ${themeStyles[state.theme].hover}`}
+                    className={`block w-full text-left px-4 py-2 text-sm ${
+                      theme === 'light' ? 'hover:bg-gray-100' : 'hover:bg-gray-700'
+                    }`}
                     onClick={() => handlePowerAction('logout')}
                   >
                     Sign out
@@ -1646,30 +1132,43 @@ const DesktopOS = () => {
                 </motion.div>
               )}
             </div>
+            
+            <span className={`text-sm ${
+              theme === 'light' ? 'text-black/90' : 'text-white/90'
+            }`}>{currentTime}</span>
           </div>
         </div>
 
         {/* Start Menu */}
         <AnimatePresence>
-          {state.isStartMenuOpen && (
+          {isStartMenuOpen && (
             <motion.div
-              ref={startMenuRef}
-              className={`fixed ${state.taskbarPosition === 'bottom' ? 'bottom-12 left-4' : 
-                state.taskbarPosition === 'top' ? 'top-12 left-4' :
-                state.taskbarPosition === 'left' ? 'bottom-4 left-12' :
-                'bottom-4 right-12'} 
-              w-[420px] h-[600px] ${themeStyles[state.theme].startMenu} backdrop-blur-3xl rounded-3xl shadow-2xl border ${
-                themeStyles[state.theme].border
-              } z-50 overflow-hidden flex flex-col`}
-              initial={state.animationEnabled ? { opacity: 0, y: state.taskbarPosition === 'bottom' ? 50 : -50, scale: 0.85 } : false}
-              animate={state.animationEnabled ? { opacity: 1, y: 0, scale: 1 } : false}
-              exit={state.animationEnabled ? { opacity: 0, y: state.taskbarPosition === 'bottom' ? 30 : -30, scale: 0.9 } : false}
-              transition={state.animationEnabled ? { type: "spring", stiffness: 140, damping: 20 } : false}
+              className={`${themeStyles[theme].startMenu} backdrop-blur-3xl rounded-3xl shadow-2xl border ${
+                theme === 'light' ? 'border-black/20' : 'border-white/20'
+              } z-50`}
+              style={{
+                position: 'fixed',
+                bottom: 12,
+                left: viewport.width <= 480 ? '50%' : 16,
+                transform: viewport.width <= 480 ? 'translateX(-50%)' : undefined,
+                width: viewport.width <= 420 ? Math.min(360, viewport.width - 32) : (compactMode ? 320 : 420),
+                maxWidth: '95vw',
+                maxHeight: `${Math.max(200, viewport.height - taskbarHeight - 48)}px`,
+                overflow: 'hidden'
+              }}
+              initial={{ opacity: 0, y: 50, scale: 0.85 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 30, scale: 0.9 }}
+              transition={{
+                type: "spring",
+                stiffness: 140,
+                damping: 20
+              }}
             >
               {/* Watermark */}
               <div className="px-5 pt-5 pb-2 flex justify-between items-center">
                 <span className={`text-xs font-semibold select-none ${
-                  themeStyles[state.theme].window === 'bg-[#f5f5f5] text-black' ? 'text-black/40' : 'text-white/40'
+                  theme === 'light' ? 'text-black/40' : 'text-white/40'
                 }`}>Hypernova OS v1.0</span>
               </div>
 
@@ -1679,342 +1178,95 @@ const DesktopOS = () => {
                   type="text"
                   placeholder="Search apps..."
                   className={`w-full p-2 rounded-xl ${
-                    themeStyles[state.theme].window === 'bg-[#f5f5f5] text-black' 
-                      ? 'bg-black/10 focus:ring-black/30 placeholder-black/50' 
-                      : 'bg-white/10 focus:ring-white/30 placeholder-white/50'
+                    theme === 'light' ? 'bg-black/10 focus:ring-black/30 placeholder-black/50' : 'bg-white/10 focus:ring-white/30 placeholder-white/50'
                   } focus:outline-none focus:ring-2`}
-                  value={state.searchQuery}
-                  onChange={(e) => setState(prev => ({ ...prev, searchQuery: e.target.value }))}
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
                 />
               </div>
 
-              {/* Categories */}
-              <div className="px-5 pb-2">
-                <div className="flex overflow-x-auto pb-2">
-                  {appCategories.map(category => (
-                    <button
-                      key={category.id}
-                      className={`px-3 py-1 rounded-full whitespace-nowrap mr-2 ${
-                        state.selectedCategory === category.id 
-                          ? `text-white bg-[${state.accentColor}]`
-                          : themeStyles[state.theme].hover
-                      }`}
-                      onClick={() => setState(prev => ({ ...prev, selectedCategory: category.id }))}
-                    >
-                      {category.name}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
               {/* Apps Grid */}
-              <div className="flex-1 p-5 pt-0 overflow-y-auto">
-                {state.startMenuLayout === 'grid' ? (
-                  <div className="grid grid-cols-3 gap-5">
-                    {filteredApps.length > 0 ? (
-                      filteredApps.map(app => (
-                        <motion.button
-                          key={app.id}
-                          className={`flex flex-col items-center gap-2 p-4 rounded-2xl ${themeStyles[state.theme].hover} transition duration-300 ease-in-out shadow-lg`}
-                          whileHover={{
-                            scale: 1.15,
-                            boxShadow: themeStyles[state.theme].window === 'bg-[#f5f5f5] text-black' 
-                              ? "0px 16px 40px rgba(0,0,0,0.15)" 
-                              : "0px 16px 40px rgba(255,255,255,0.15)",
-                            transition: { type: "spring", stiffness: 400, damping: 20 }
-                          }}
-                          whileTap={{ scale: 0.95 }}
-                          onClick={() => openWindow(app.id)}
-                        >
-                          <span className="text-4xl">{app.icon}</span>
-                          <span className={`text-sm text-center ${
-                            themeStyles[state.theme].window === 'bg-[#f5f5f5] text-black' ? 'text-black/90' : 'text-white/90'
-                          }`}>{app.name}</span>
-                        </motion.button>
-                      ))
-                    ) : (
-                      <div className={`col-span-3 text-center py-10 ${
-                        themeStyles[state.theme].window === 'bg-[#f5f5f5] text-black' ? 'text-black/50' : 'text-white/50'
-                      }`}>No apps found</div>
-                    )}
+              <div className="p-5 pt-0" style={{ overflow: 'hidden' }}>
+                <div style={{ maxHeight: `${Math.max(120, viewport.height - taskbarHeight - 280)}px`, overflowY: 'auto', paddingRight: 8 }}>
+                  <div className="grid gap-4" style={{
+                    gridTemplateColumns: viewport.width <= 420 ? 'repeat(auto-fit, minmax(120px, 1fr))' : (compactMode ? 'repeat(auto-fit, minmax(140px, 1fr))' : 'repeat(auto-fit, minmax(140px, 1fr))')
+                  }}>
+                  {filteredApps.length > 0 ? (
+                    filteredApps.map(app => (
+                      <motion.button
+                        key={app.id}
+                        className={`flex flex-col items-center gap-2 p-3 rounded-2xl ${
+                          theme === 'light' ? 'bg-black/5 hover:bg-black/20' : 'bg-white/5 hover:bg-white/20'
+                        } transition duration-300 ease-in-out shadow-lg`}
+                        whileHover={{
+                          scale: 1.12,
+                          boxShadow: theme === 'light' ? "0px 12px 32px rgba(0,0,0,0.12)" : "0px 12px 32px rgba(255,255,255,0.12)",
+                          transition: { type: "spring", stiffness: 300, damping: 18 }
+                        }}
+                        whileTap={{ scale: 0.96 }}
+                        onClick={() => openWindow(app.id)}
+                      >
+                        <span className="text-3xl">{app.icon}</span>
+                        <span className={`text-sm text-center ${
+                          theme === 'light' ? 'text-black/90' : 'text-white/90'
+                        }`}>{app.name}</span>
+                      </motion.button>
+                    ))
+                  ) : (
+                    <div className={`text-center py-10 ${
+                      theme === 'light' ? 'text-black/50' : 'text-white/50'
+                    }`}>No apps found</div>
+                  )}
                   </div>
-                ) : (
-                  <div className="space-y-2">
-                    {filteredApps.length > 0 ? (
-                      filteredApps.map(app => (
-                        <motion.button
-                          key={app.id}
-                          className={`flex items-center gap-3 w-full p-3 rounded-xl ${themeStyles[state.theme].hover}`}
-                          whileHover={{ scale: 1.02 }}
-                          whileTap={{ scale: 0.98 }}
-                          onClick={() => openWindow(app.id)}
-                        >
-                          <span className="text-2xl">{app.icon}</span>
-                          <span className={`text-sm ${
-                            themeStyles[state.theme].window === 'bg-[#f5f5f5] text-black' ? 'text-black/90' : 'text-white/90'
-                          }`}>{app.name}</span>
-                        </motion.button>
-                      ))
-                    ) : (
-                      <div className={`text-center py-10 ${
-                        themeStyles[state.theme].window === 'bg-[#f5f5f5] text-black' ? 'text-black/50' : 'text-white/50'
-                      }`}>No apps found</div>
-                    )}
-                  </div>
-                )}
+                </div>
               </div>
 
-              {/* User and Power Options */}
-              <div className={`border-t ${themeStyles[state.theme].border} p-4 flex justify-between items-center`}>
-                <div className="flex items-center gap-3">
-                  <div 
-                    className="w-8 h-8 rounded-full flex items-center justify-center text-white"
-                    style={{ backgroundColor: state.accentColor }}
-                  >
-                    <span className="text-sm">U</span>
+              {/* Footer: user/power + personalization (sticky) */}
+              <div className={`border-t ${theme === 'light' ? 'border-black/10' : 'border-white/10'} p-4`}>
+                <div className="flex items-center justify-between w-full">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-white">
+                      <span className="text-sm">U</span>
+                    </div>
+                    <span className={`text-sm font-medium ${theme === 'light' ? 'text-black/90' : 'text-white/90'}`}>User</span>
                   </div>
-                  <span className={`text-sm font-medium ${
-                    themeStyles[state.theme].window === 'bg-[#f5f5f5] text-black' ? 'text-black/90' : 'text-white/90'
-                  }`}>User</span>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      className={`p-2 rounded-full ${theme === 'light' ? 'hover:bg-black/10' : 'hover:bg-white/10'}`}
+                      onClick={() => handlePowerAction('shutdown')}
+                      title="Power"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                      </svg>
+                    </button>
+                    <span className={`text-sm ${theme === 'light' ? 'text-black/90' : 'text-white/90'}`}>{currentTime}</span>
+                  </div>
                 </div>
-                <button
-                  className={`p-2 rounded-full ${themeStyles[state.theme].hover}`}
-                  onClick={() => handlePowerAction('shutdown')}
-                  title="Power"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-                  </svg>
-                </button>
+
+                <div className="mt-3 sticky bottom-0 bg-transparent pt-3">
+                  <h3 className={`text-sm font-medium mb-2 ${theme === 'light' ? 'text-black/90' : 'text-white/90'}`}>Personalization</h3>
+                  <div className="flex flex-col gap-2">
+                    <div className="flex gap-2">
+                      <button className={`p-2 rounded-md ${theme === 'light' ? 'hover:bg-black/10' : 'hover:bg-white/10'}`} onClick={() => changeTheme('dark')} title="Dark theme">...</button>
+                      <button className={`p-2 rounded-md ${theme === 'light' ? 'hover:bg-black/10' : 'hover:bg_white/10'}`} onClick={() => changeTheme('light')} title="Light theme">...</button>
+                      <button className={`p-2 rounded-md ${theme === 'light' ? 'hover:bg-black/10' : 'hover:bg-white/10'}`} onClick={() => changeWallpaper('nature')} title="Nature wallpaper">...</button>
+                      <button className={`p-2 rounded-md ${theme === 'light' ? 'hover:bg-black/10' : 'hover:bg-white/10'}`} onClick={() => changeWallpaper('abstract')} title="Abstract wallpaper">...</button>
+                    </div>
+
+                    <div className="flex items-center gap-2 mt-2">
+                      <button className="px-3 py-1 rounded-md bg-gray-700 text-white" onClick={() => setScale(0.9)} title="Zoom out">-</button>
+                      <button className="px-3 py-1 rounded-md bg-gray-700 text-white" onClick={() => setScale(1)} title="Default">100%</button>
+                      <button className="px-3 py-1 rounded-md bg-gray-700 text-white" onClick={() => setScale(1.05)} title="Zoom in">+</button>
+                      <button className="px-3 py-1 rounded-md bg-transparent text-sm underline" onClick={() => setScale(null)}>Auto</button>
+                    </div>
+                  </div>
+                </div>
               </div>
             </motion.div>
           )}
         </AnimatePresence>
-
-        {/* Desktop Context Menu */}
-        {showDesktopContextMenu && (
-          <motion.div
-            className={`fixed ${themeStyles[state.theme].contextMenu} shadow-xl rounded-md z-50 context-menu`}
-            style={{
-              top: desktopContextMenuPosition.y,
-              left: desktopContextMenuPosition.x
-            }}
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.9 }}
-          >
-            <button
-              className={`block w-full text-left px-4 py-2 text-sm ${themeStyles[state.theme].hover}`}
-              onClick={() => {
-                setShowDesktopContextMenu(false);
-                openWindow(1); // File Explorer
-              }}
-            >
-              Open File Explorer
-            </button>
-            <button
-              className={`block w-full text-left px-4 py-2 text-sm ${themeStyles[state.theme].hover}`}
-              onClick={() => {
-                setShowDesktopContextMenu(false);
-                setState(prev => ({ ...prev, isStartMenuOpen: true }));
-              }}
-            >
-              Open Start Menu
-            </button>
-            <div className="border-t border-gray-200/10"></div>
-            <button
-              className={`block w-full text-left px-4 py-2 text-sm ${themeStyles[state.theme].hover}`}
-              onClick={() => {
-                setShowDesktopContextMenu(false);
-                toggleShowDesktop();
-              }}
-            >
-              {state.showDesktop ? 'Show Windows' : 'Show Desktop'}
-            </button>
-            <button
-              className={`block w-full text-left px-4 py-2 text-sm ${themeStyles[state.theme].hover}`}
-              onClick={() => {
-                setShowDesktopContextMenu(false);
-                toggleDesktopIcons();
-              }}
-            >
-              {state.desktopIcons ? 'Hide Desktop Icons' : 'Show Desktop Icons'}
-            </button>
-            <div className="border-t border-gray-200/10"></div>
-            <button
-              className={`block w-full text-left px-4 py-2 text-sm ${themeStyles[state.theme].hover}`}
-              onClick={() => {
-                setShowDesktopContextMenu(false);
-                openWindow(3); // Settings
-              }}
-            >
-              Display Settings
-            </button>
-            <button
-              className={`block w-full text-left px-4 py-2 text-sm ${themeStyles[state.theme].hover}`}
-              onClick={() => {
-                setShowDesktopContextMenu(false);
-                openWindow(12); // Task Manager
-              }}
-            >
-              Task Manager
-            </button>
-          </motion.div>
-        )}
-
-        {/* File Context Menu */}
-        {showFileContextMenu && selectedFile && (
-          <motion.div
-            className={`fixed ${themeStyles[state.theme].contextMenu} shadow-xl rounded-md z-50 context-menu`}
-            style={{
-              top: fileContextMenuPosition.y,
-              left: fileContextMenuPosition.x
-            }}
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.9 }}
-          >
-            <div className="px-4 py-2 flex items-center gap-2 border-b border-gray-200/10">
-              <span className="text-lg">{selectedFile.icon}</span>
-              <span className="font-medium">{selectedFile.name}</span>
-            </div>
-            <button
-              className={`block w-full text-left px-4 py-2 text-sm ${themeStyles[state.theme].hover}`}
-              onClick={() => {
-                setShowFileContextMenu(false);
-                if (selectedFile.type === 'app') {
-                  const app = apps.find(a => a.name === selectedFile.name);
-                  if (app) openWindow(app.id);
-                }
-              }}
-            >
-              Open
-            </button>
-            <button
-              className={`block w-full text-left px-4 py-2 text-sm ${themeStyles[state.theme].hover}`}
-              onClick={() => {
-                setShowFileContextMenu(false);
-                // Implement pin to taskbar
-                addNotification('Pinned to Taskbar', `${selectedFile.name} has been pinned to taskbar`, '📌');
-              }}
-            >
-              Pin to Taskbar
-            </button>
-            <div className="border-t border-gray-200/10"></div>
-            <button
-              className={`block w-full text-left px-4 py-2 text-sm ${themeStyles[state.theme].hover}`}
-              onClick={() => {
-                setShowFileContextMenu(false);
-                // Implement rename functionality
-                addNotification('Rename', `Renaming ${selectedFile.name}`, '✏️');
-              }}
-            >
-              Rename
-            </button>
-            <button
-              className={`block w-full text-left px-4 py-2 text-sm ${themeStyles[state.theme].hover}`}
-              onClick={() => {
-                setShowFileContextMenu(false);
-                // Implement delete functionality
-                addNotification('Deleted', `${selectedFile.name} has been moved to recycle bin`, '🗑️');
-              }}
-            >
-              Delete
-            </button>
-            <div className="border-t border-gray-200/10"></div>
-            <button
-              className={`block w-full text-left px-4 py-2 text-sm ${themeStyles[state.theme].hover}`}
-              onClick={() => {
-                setShowFileContextMenu(false);
-                // Implement properties functionality
-                addNotification('Properties', `Showing properties for ${selectedFile.name}`, '📋');
-              }}
-            >
-              Properties
-            </button>
-          </motion.div>
-        )}
-
-        {/* Taskbar Context Menu */}
-        {showTaskbarContextMenu && (
-          <motion.div
-            className={`fixed ${themeStyles[state.theme].contextMenu} shadow-xl rounded-md z-50 context-menu`}
-            style={{
-              top: taskbarContextMenuPosition.y,
-              left: taskbarContextMenuPosition.x
-            }}
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.9 }}
-          >
-            <button
-              className={`block w-full text-left px-4 py-2 text-sm ${themeStyles[state.theme].hover}`}
-              onClick={() => {
-                setShowTaskbarContextMenu(false);
-                setState(prev => ({ ...prev, isStartMenuOpen: true }));
-              }}
-            >
-              Open Start Menu
-            </button>
-            <button
-              className={`block w-full text-left px-4 py-2 text-sm ${themeStyles[state.theme].hover}`}
-              onClick={() => {
-                setShowTaskbarContextMenu(false);
-                toggleShowDesktop();
-              }}
-            >
-              {state.showDesktop ? 'Show Windows' : 'Show Desktop'}
-            </button>
-            <div className="border-t border-gray-200/10"></div>
-            <div className="px-4 py-1 text-xs opacity-50">Taskbar Position</div>
-            <button
-              className={`block w-full text-left px-4 py-2 text-sm ${state.taskbarPosition === 'bottom' ? themeStyles[state.theme].active : themeStyles[state.theme].hover}`}
-              onClick={() => {
-                setShowTaskbarContextMenu(false);
-                changeTaskbarPosition('bottom');
-              }}
-            >
-              Bottom
-            </button>
-            <button
-              className={`block w-full text-left px-4 py-2 text-sm ${state.taskbarPosition === 'top' ? themeStyles[state.theme].active : themeStyles[state.theme].hover}`}
-              onClick={() => {
-                setShowTaskbarContextMenu(false);
-                changeTaskbarPosition('top');
-              }}
-            >
-              Top
-            </button>
-            <button
-              className={`block w-full text-left px-4 py-2 text-sm ${state.taskbarPosition === 'left' ? themeStyles[state.theme].active : themeStyles[state.theme].hover}`}
-              onClick={() => {
-                setShowTaskbarContextMenu(false);
-                changeTaskbarPosition('left');
-              }}
-            >
-              Left
-            </button>
-            <button
-              className={`block w-full text-left px-4 py-2 text-sm ${state.taskbarPosition === 'right' ? themeStyles[state.theme].active : themeStyles[state.theme].hover}`}
-              onClick={() => {
-                setShowTaskbarContextMenu(false);
-                changeTaskbarPosition('right');
-              }}
-            >
-              Right
-            </button>
-            <div className="border-t border-gray-200/10"></div>
-            <button
-              className={`block w-full text-left px-4 py-2 text-sm ${themeStyles[state.theme].hover}`}
-              onClick={() => {
-                setShowTaskbarContextMenu(false);
-                openWindow(3); // Settings
-              }}
-            >
-              Taskbar Settings
-            </button>
-          </motion.div>
-        )}
       </div>
     </div>
   );
