@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import PropTypes from 'prop-types';
 import DOMPurify from 'dompurify';
 import { motion, AnimatePresence, useAnimation } from 'framer-motion';
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import { 
   FiCopy, FiSend, FiPlus, FiX, FiImage, FiFile, FiTrash2, 
   FiClock, FiCpu, FiSettings, FiStopCircle, FiMessageSquare,
@@ -9,6 +10,12 @@ import {
   FiExternalLink, FiCheck, FiInfo, FiStar, FiAlertTriangle, FiRefreshCw, FiThumbsUp, FiThumbsDown, FiCornerUpLeft
 } from 'react-icons/fi';
 import { RiSendPlaneFill } from 'react-icons/ri';
+
+// OCR / document read removed
+
+// Web search removed
+
+// Web scraping removed
 
 const ChatBot = () => {
   const [chatRooms, setChatRooms] = useState([]);
@@ -27,15 +34,15 @@ const ChatBot = () => {
   const [processingSources, setProcessingSources] = useState([]);
   const [autoScroll, setAutoScroll] = useState(true);
   const [showScrollButton, setShowScrollButton] = useState(false);
+  // Search/web-research removed
   const [copiedMessageId, setCopiedMessageId] = useState(null);
   const [inputFocused, setInputFocused] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [replyQuote, setReplyQuote] = useState(null);
   const [selectedText, setSelectedText] = useState('');
   const [showSelectionToolbar, setShowSelectionToolbar] = useState(false);
-  const [apiKey, setApiKey] = useState('');
-  const [showApiKeyInput, setShowApiKeyInput] = useState(false);
   
+  // Ads removed
   const messagesEndRef = useRef(null);
   const textareaRef = useRef(null);
   const chatContainerRef = useRef(null);
@@ -43,15 +50,13 @@ const ChatBot = () => {
   const currentMessageId = useRef(null);
   const controls = useAnimation();
 
-  // Initialize API Key from localStorage
-  useEffect(() => {
-    const savedApiKey = localStorage.getItem('geminiApiKey');
-    if (savedApiKey) {
-      setApiKey(savedApiKey);
-    } else {
-      setShowApiKeyInput(true);
-    }
-  }, []);
+  // Initialize Google Generative AI
+  const genAI = new GoogleGenerativeAI("AIzaSyDSTgkkROL7mjaGKoD2vnc8l2UptNCbvHk");
+ const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+
+  // Ads removed
+
+  // Memory feature removed for efficiency (no-op placeholders kept minimal)
 
   // Enter fullscreen mode when component mounts
   useEffect(() => {
@@ -67,9 +72,13 @@ const ChatBot = () => {
       }
     };
 
+    // Add animation class to body for smooth transitions
     document.body.classList.add('smooth-transitions');
+    
+    // Enter fullscreen with a slight delay to allow DOM to load
     const fullscreenTimer = setTimeout(enterFullscreen, 300);
     
+    // Cleanup
     return () => {
       clearTimeout(fullscreenTimer);
       document.body.classList.remove('smooth-transitions');
@@ -85,13 +94,15 @@ const ChatBot = () => {
     if (savedChatRooms) setChatRooms(JSON.parse(savedChatRooms));
     if (savedCurrentRoom) {
       setCurrentRoomId(savedCurrentRoom);
-      const roomMessages = localStorage.getItem(`roomMessages_${savedCurrentRoom}`);
-      const roomHistory = localStorage.getItem(`roomHistory_${savedCurrentRoom}`);
-      if (roomMessages) setMessages(JSON.parse(roomMessages));
-      if (roomHistory) setChatHistory(JSON.parse(roomHistory));
+      const room = JSON.parse(savedCurrentRoom);
+      if (room) {
+        setMessages(room.messages || []);
+        setChatHistory(room.history || []);
+      }
     }
     if (savedDarkMode) setDarkMode(savedDarkMode === 'true');
     
+    // Create initial room if none exists
     if (!savedCurrentRoom && (!savedChatRooms || JSON.parse(savedChatRooms).length === 0)) {
       createNewChatRoom();
     }
@@ -107,9 +118,7 @@ const ChatBot = () => {
       );
       setChatRooms(updatedRooms);
       localStorage.setItem('orionChatRooms', JSON.stringify(updatedRooms));
-      localStorage.setItem('orionCurrentRoom', currentRoomId);
-      localStorage.setItem(`roomMessages_${currentRoomId}`, JSON.stringify(messages));
-      localStorage.setItem(`roomHistory_${currentRoomId}`, JSON.stringify(chatHistory));
+      localStorage.setItem('orionCurrentRoom', JSON.stringify(currentRoomId));
     }
   }, [messages, chatHistory, currentRoomId, chatRooms]);
 
@@ -138,119 +147,104 @@ const ChatBot = () => {
     duration,
     file,
     sources,
-    isCode: text.includes('```'),
+    isCode: text.includes('```'), // Flag for code blocks
     quoted: null
   });
 
+  // OCR/document reading removed — file extraction not performed for efficiency
+
+  // Memory/pro features removed: no background summarization or memory lookup
+
   const typeMessage = async (fullText, callback) => {
+    
+    // Split text into chunks for smoother animation
     const characters = fullText.split('');
     let displayedText = '';
     
     for (let i = 0; i < characters.length; i++) {
       if (abortController?.signal.aborted) break;
       
+      // Add next 5-10 characters at a time (smaller chunks for smoother typing)
       const chunkSize = Math.min(5 + Math.floor(Math.random() * 6), characters.length - i);
       const chunk = characters.slice(i, i + chunkSize).join('');
       displayedText += chunk;
       
+      // Update the message without any blur effect
       callback(displayedText);
       i += chunkSize - 1;
       
+      // Smooth scrolling during typing if auto-scroll is enabled
       if (autoScroll) {
         setTimeout(() => {
           messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         }, 0);
       }
       
+      // Random typing speed for more natural feel
       await new Promise(resolve => setTimeout(resolve, Math.random() * 10 + 20));
     }
     
     callback(fullText);
   };
 
-  // Call Gemini API via fetch
-  const callGeminiAPI = async (prompt, signal) => {
-    if (!apiKey) {
-      throw new Error('API Key belum diatur. Silakan masukkan API Key Gemini Anda.');
-    }
-
-    const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
-
-    const requestBody = {
-      contents: [{
-        parts: [{
-          text: prompt
-        }]
-      }],
-      generationConfig: {
-        temperature: 0.7,
-        topK: 40,
-        topP: 0.95,
-        maxOutputTokens: 2048,
-      }
-    };
-
-    const response = await fetch(API_URL, {
+  // Fallback helper: send prompt to a server-side proxy endpoint (/api/generate)
+  // The server should accept { prompt } and return a plain text response.
+  const sendToServerProxy = async (prompt, signal) => {
+    const resp = await fetch('/api/generate', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(requestBody),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt }),
       signal
     });
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.error?.message || `HTTP error! status: ${response.status}`);
+    if (!resp.ok) {
+      const text = await resp.text().catch(() => null);
+      throw new Error(`Proxy error ${resp.status}: ${text || resp.statusText}`);
     }
 
-    const data = await response.json();
-    
-    if (data.candidates && data.candidates[0] && data.candidates[0].content) {
-      return data.candidates[0].content.parts[0].text;
-    } else {
-      throw new Error('Format respons API tidak valid');
+    return await resp.text();
+  };
+
+  // Unified model caller: try SDK first, fall back to server proxy.
+  const callModel = async (prompt, signal) => {
+    try {
+      // Try SDK path first (may fail in browser due to CORS or server-only SDK)
+      const sdkResult = await model.generateContent(prompt);
+      // Many SDK responses expose a response.text() helper
+      if (sdkResult?.response && typeof sdkResult.response.text === 'function') {
+        const t = await sdkResult.response.text();
+        if (t) return t;
+      }
+
+      // Some SDK shapes include output/content arrays
+      if (sdkResult?.output && Array.isArray(sdkResult.output)) {
+        const out = sdkResult.output.map(o => (o.content || []).map(c => c.text || '').join('')).join('\n');
+        if (out) return out;
+      }
+
+      // Fallback to stringifying whatever we got
+      return String(sdkResult || '');
+    } catch (sdkErr) {
+      console.warn('SDK generateContent failed, using server proxy fallback', sdkErr);
+      // Fallback: call local server proxy at /api/generate (implement server separately)
+      return await sendToServerProxy(prompt, signal);
     }
   };
 
-  const processSpecialChars = (text) => {
-    const codeBlockRegex = /```(\w+)?\n([\s\S]*?)\n```/g;
-    const withCodeBlocks = text.replace(codeBlockRegex, (match, language, code) => {
-      const cleanCode = code.replace(/</g, '&lt;').replace(/>/g, '&gt;');
-      return `<div class="code-container">
-        <div class="code-toolbar">
-          <span class="language-tag">${language || 'code'}</span>
-          <button class="copy-button" data-code="${encodeURIComponent(cleanCode)}">
-            <FiCopy /> Copy
-          </button>
-        </div>
-        <pre class="code-block"><code class="language-${language || 'plaintext'}">${cleanCode}</code></pre>
-      </div>`;
-    });
 
-    return withCodeBlocks
-      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-      .replace(/\*(.*?)\*/g, '<em>$1</em>')
-      .replace(/_(.*?)_/g, '<u>$1</u>')
-      .replace(/~~(.*?)~~/g, '<s>$1</s>')
-      .replace(/`(.*?)`/g, '<code>$1</code>')
-      .replace(/\n/g, '<br />');
-  };
+
+  // Web research removed for efficiency
 
   const handleSendMessage = async (messageText, files = []) => {
     const trimmedMessage = messageText.trim();
     if ((!trimmedMessage && files.length === 0) || isBotTyping) return;
-
-    if (!apiKey) {
-      setShowApiKeyInput(true);
-      return;
-    }
 
     const controller = new AbortController();
     setAbortController(controller);
     const timeoutId = setTimeout(() => controller.abort(), 300000);
 
     try {
+      // Add user message to chat history
       const userMessage = { role: 'user', content: trimmedMessage };
       const updatedHistory = [...chatHistory, userMessage];
       setChatHistory(updatedHistory);
@@ -271,8 +265,8 @@ const ChatBot = () => {
       }
 
       setInputMessage('');
-      setPendingFiles([]);
-      setIsBotTyping(true);
+    setPendingFiles([]);
+    setIsBotTyping(true);
       messageCountRef.current += 1;
       setProcessingSources([]);
 
@@ -280,6 +274,7 @@ const ChatBot = () => {
         textareaRef.current.style.height = 'auto';
       }
 
+      // Create initial message object for bot response
       const messageId = Date.now().toString();
       currentMessageId.current = messageId;
       
@@ -295,60 +290,56 @@ const ChatBot = () => {
 
       const startTime = Date.now();
 
+  // (Memory lookup removed) No additional memory or pro-mode requests; single model call below
+      // Combine chat history into prompt
       const contextMessages = updatedHistory.slice(-15).map(msg => {
         return msg.role === 'user' ? `User: ${msg.content}` : `Orion: ${msg.content}`;
       }).join('\n');
 
+      // No web search — single model prompt built from recent conversation
+      const webResearchContent = { summary: '', sources: [] };
       const quoted = replyQuote ? replyQuote.text.replace(/<[^>]*>?/gm, '') : '';
       const fullPrompt = replyQuote ?
         `Fokus hanya pada kutipan berikut dan jawab berdasar itu:\n"${quoted}"\n\nPercakapan Saat Ini:\n${contextMessages}\n\nUser: "${trimmedMessage}". Respond as Orion in natural language, be concise but very helpful. For coding, provide complete solutions with proper formatting.`
         : `Percakapan Saat Ini:\n${contextMessages}\n\nUser: "${trimmedMessage}". Respond as Orion in natural language, be concise but very helpful. For coding, provide complete solutions with proper formatting. Always maintain context.`;
 
-      const botResponse = await callGeminiAPI(fullPrompt, controller.signal);
-      const processedResponse = processSpecialChars(botResponse);
+      // Unified call: try SDK then fallback to proxy
+      const botResponse = await callModel(fullPrompt, controller.signal);
+
+  const processedResponse = processSpecialChars(botResponse);
       const duration = Date.now() - startTime;
 
+      // Update the message with final response
       setMessages(prev => prev.map(msg => 
         msg.id === messageId 
           ? { 
               ...msg,
               text: processedResponse, 
               duration,
-              sources: [],
+              sources: webResearchContent.sources,
               isCode: processedResponse.includes('```')
             } 
           : msg
       ));
 
+      // Type out the message with animation
       await typeMessage(processedResponse, (typedText) => {
         setMessages(prev => prev.map(msg => 
           msg.id === messageId ? { ...msg, text: typedText } : msg
         ));
       });
 
-      const botMessage = { role: 'assistant', content: botResponse };
-      const newChatHistory = [...updatedHistory, botMessage];
-      setChatHistory(newChatHistory);
-      
-      if (replyQuote) setReplyQuote(null);
+    // Add bot response to chat history
+    const botMessage = { role: 'assistant', content: botResponse };
+    const newChatHistory = [...updatedHistory, botMessage];
+    setChatHistory(newChatHistory);
+    // Clear reply quote after sending
+    if (replyQuote) setReplyQuote(null);
 
     } catch (error) {
-      console.error('Error calling Gemini API:', error);
-      
-      let errorMessage = 'Waduh, ada yang salah nih! ';
-      if (error.name === 'AbortError') {
-        errorMessage = 'Respon dihentikan oleh pengguna';
-      } else if (error.message.includes('API Key')) {
-        errorMessage = error.message;
-        setShowApiKeyInput(true);
-      } else if (error.message.includes('quota')) {
-        errorMessage = 'Quota API telah habis. Silakan periksa quota Gemini AI Anda.';
-      } else if (error.message.includes('API key not valid')) {
-        errorMessage = 'API Key tidak valid. Silakan periksa kembali API Key Anda.';
-        setShowApiKeyInput(true);
-      } else {
-        errorMessage += error.message;
-      }
+      const errorMessage = error.name === 'AbortError' 
+        ? 'Respon dihentikan oleh pengguna'
+        : 'Waduh, ada yang salah nih sama Orion! Gak konek ke servernya...';
       
       setMessages(prev => [...prev, createMessageObject(errorMessage, true)]);
     } finally {
@@ -359,6 +350,36 @@ const ChatBot = () => {
       setAbortController(null);
       currentMessageId.current = null;
     }
+  };
+
+  const handleTemplateButtonClick = (templateMessage) => {
+    handleSendMessage(templateMessage);
+  };
+
+  const processSpecialChars = (text) => {
+    // Process code blocks first
+    const codeBlockRegex = /```(\w+)?\n([\s\S]*?)\n```/g;
+    const withCodeBlocks = text.replace(codeBlockRegex, (match, language, code) => {
+      const cleanCode = code.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      return `<div class="code-container">
+        <div class="code-toolbar">
+          <span class="language-tag">${language || 'code'}</span>
+          <button class="copy-button" data-code="${encodeURIComponent(cleanCode)}">
+            <FiCopy /> Copy
+          </button>
+        </div>
+        <pre class="code-block"><code class="language-${language || 'plaintext'}">${cleanCode}</code></pre>
+      </div>`;
+    });
+
+    // Process other markdown
+    return withCodeBlocks
+      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+      .replace(/\*(.*?)\*/g, '<em>$1</em>')
+      .replace(/_(.*?)_/g, '<u>$1</u>')
+      .replace(/~~(.*?)~~/g, '<s>$1</s>')
+      .replace(/`(.*?)`/g, '<code>$1</code>')
+      .replace(/\n/g, '<br />');
   };
 
   const copyToClipboard = (text, id) => {
@@ -378,9 +399,19 @@ const ChatBot = () => {
     }
   };
 
+  // Memory helpers removed
+
+  // Pro Mode removed
+
+  // Search/web-research removed
+
+  // Small helper functions (room management, theme toggle, scrolling)
   const toggleDarkMode = () => setDarkMode(prev => !prev);
 
   const createNewChatRoom = (name = 'Percakapan Baru') => {
+    // If called as an event handler (onClick={createNewChatRoom}), React
+    // will pass the event as first arg. Guard against that to avoid
+    // storing non-serializable event objects in localStorage.
     if (name && typeof name === 'object' && name.currentTarget) {
       name = 'Percakapan Baru';
     }
@@ -405,12 +436,8 @@ const ChatBot = () => {
     const room = chatRooms.find(r => r.id === roomId);
     if (!room) return;
     setCurrentRoomId(roomId);
-    
-    const roomMessages = localStorage.getItem(`roomMessages_${roomId}`);
-    const roomHistory = localStorage.getItem(`roomHistory_${roomId}`);
-    
-    setMessages(roomMessages ? JSON.parse(roomMessages) : []);
-    setChatHistory(roomHistory ? JSON.parse(roomHistory) : []);
+    setMessages(room.messages || []);
+    setChatHistory(room.history || []);
     localStorage.setItem('orionCurrentRoom', roomId);
   };
 
@@ -418,11 +445,6 @@ const ChatBot = () => {
     const updatedRooms = chatRooms.filter(r => r.id !== roomId);
     setChatRooms(updatedRooms);
     localStorage.setItem('orionChatRooms', JSON.stringify(updatedRooms));
-    
-    // Remove room-specific data from localStorage
-    localStorage.removeItem(`roomMessages_${roomId}`);
-    localStorage.removeItem(`roomHistory_${roomId}`);
-    
     if (currentRoomId === roomId) {
       if (updatedRooms.length > 0) switchChatRoom(updatedRooms[0].id);
       else createNewChatRoom();
@@ -435,6 +457,7 @@ const ChatBot = () => {
     el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
   };
 
+  // Stop generation helper: aborts the model call and cleans up UI state
   const stopGeneration = () => {
     try {
       if (abortController) {
@@ -455,13 +478,14 @@ const ChatBot = () => {
   };
 
   const regenerateMessage = async (message) => {
+    // Re-run generation using the same prompt context; if replyQuote is set use that snippet
     const quoted = message?.text?.replace(/<[^>]*>?/gm, '').slice(0, 2000);
     const prompt = replyQuote ? `Fokus pada kutipan berikut dan jawab berdasarkan itu:\n"${replyQuote.text}"\n\n${quoted}` : `Tolong ulangi dan perbaiki jawaban berikut:\n${quoted}`;
     try {
       setIsBotTyping(true);
       const controller = new AbortController();
       setAbortController(controller);
-      const botResponse = await callGeminiAPI(prompt, controller.signal);
+      const botResponse = await callModel(prompt, controller.signal);
       const processed = processSpecialChars(botResponse);
       setMessages(prev => prev.map(m => m.id === message.id ? { ...m, text: processed } : m));
     } catch (e) {
@@ -472,10 +496,26 @@ const ChatBot = () => {
     }
   };
 
-  const saveApiKey = () => {
-    if (apiKey.trim()) {
-      localStorage.setItem('geminiApiKey', apiKey.trim());
-      setShowApiKeyInput(false);
+  // Safe settings open/close to avoid rendering modal multiple times inside message loop
+  const openSettings = (e) => {
+    if (e && e.stopPropagation) e.stopPropagation();
+    try {
+      if (showSettings) return;
+      // Use rAF to avoid layout thrash while animations are running
+      requestAnimationFrame(() => setShowSettings(true));
+    } catch (err) {
+      console.error('openSettings error', err);
+      setShowSettings(true);
+    }
+  };
+
+  const closeSettings = (e) => {
+    if (e && e.stopPropagation) e.stopPropagation();
+    try {
+      requestAnimationFrame(() => setShowSettings(false));
+    } catch (err) {
+      console.error('closeSettings error', err);
+      setShowSettings(false);
     }
   };
 
@@ -487,12 +527,16 @@ const ChatBot = () => {
     setMessages(prev => prev.map(m => m.id === id ? { ...m, disliked: true, liked: false } : m));
   };
 
+  // Reply helpers: set a reply quote (plain text) and focus the input; clearReply cancels it
   const replyToMessage = (message) => {
     try {
+      // Extract plain text; if the message has no text (e.g., image/file-only),
+      // provide a sensible fallback so the reply preview doesn't disappear.
       const plain = message?.text ? message.text.replace(/<[^>]*>?/gm, '') : '';
       const fallback = (!plain || plain.trim().length === 0) ? (message?.file?.name ? `File: ${message.file.name}` : '<Tidak ada teks>') : null;
       setReplyQuote({ id: message.id, text: plain, fallback });
       setInputFocused(true);
+      // focus textarea next frame to ensure DOM ready
       requestAnimationFrame(() => textareaRef.current?.focus());
     } catch (err) {
       console.error('replyToMessage error', err);
@@ -504,6 +548,7 @@ const ChatBot = () => {
     setReplyQuote(null);
   };
 
+  // Selection helper: when user selects text inside a bot message, allow quick copy or focus
   const handleSelection = (e) => {
     const selection = window.getSelection().toString();
     if (selection && selection.length > 0) {
@@ -515,6 +560,9 @@ const ChatBot = () => {
     }
   };
 
+  // Memories removed
+
+  // Initialize Prism for syntax highlighting
   useEffect(() => {
     const handleCopyClick = (e) => {
       if (e.target.closest('.copy-button')) {
@@ -541,8 +589,8 @@ const ChatBot = () => {
     inputBg: 'bg-gray-800',
     inputBorder: 'border-gray-700',
     inputText: 'text-gray-100',
-    buttonBg: 'bg-purple-700',
-    buttonHover: 'hover:bg-purple-600',
+  buttonBg: 'bg-purple-700',
+  buttonHover: 'hover:bg-purple-600',
     buttonText: 'text-white',
     cardBg: 'bg-gray-800',
     codeBg: 'bg-gray-900',
@@ -561,8 +609,8 @@ const ChatBot = () => {
     inputBg: 'bg-white',
     inputBorder: 'border-purple-200',
     inputText: 'text-gray-800',
-    buttonBg: 'bg-purple-600',
-    buttonHover: 'hover:bg-purple-500',
+  buttonBg: 'bg-purple-600',
+  buttonHover: 'hover:bg-purple-500',
     buttonText: 'text-white',
     cardBg: 'bg-white',
     codeBg: 'bg-gray-50',
@@ -573,73 +621,12 @@ const ChatBot = () => {
 
   return (
     <div className={`flex flex-col h-screen ${themeClasses.bgPrimary} ${themeClasses.textPrimary} relative overflow-hidden transition-colors duration-300`}>
-      {/* API Key Input Modal */}
-      <AnimatePresence>
-        {showApiKeyInput && (
-          <motion.div 
-            initial={{ opacity: 0 }} 
-            animate={{ opacity: 1 }} 
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
-          >
-            <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              className={`${themeClasses.cardBg} rounded-xl p-6 max-w-md w-full mx-4 ${themeClasses.border}`}
-            >
-              <div className="flex items-center justify-between mb-4">
-                <h3 className={`text-lg font-semibold ${themeClasses.textPrimary}`}>Masukkan API Key Gemini</h3>
-                <button 
-                  onClick={() => setShowApiKeyInput(false)}
-                  className={`p-1 rounded-md ${themeClasses.hoverBg}`}
-                >
-                  <FiX size={20} />
-                </button>
-              </div>
-              
-              <p className={`text-sm mb-4 ${themeClasses.textSecondary}`}>
-                Anda memerlukan API Key dari Google AI Studio untuk menggunakan chatbot ini.
-              </p>
-              
-              <div className="space-y-3">
-                <input
-                  type="password"
-                  value={apiKey}
-                  onChange={(e) => setApiKey(e.target.value)}
-                  placeholder="Masukkan API Key Gemini Anda..."
-                  className={`w-full px-3 py-2 rounded-md border ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.inputText}`}
-                />
-                
-                <div className="flex space-x-2">
-                  <button
-                    onClick={saveApiKey}
-                    className={`flex-1 py-2 px-4 rounded-md ${themeClasses.buttonBg} ${themeClasses.buttonText}`}
-                  >
-                    Simpan
-                  </button>
-                  <a
-                    href="https://aistudio.google.com/apikey"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className={`flex-1 py-2 px-4 rounded-md border text-center ${themeClasses.border} ${themeClasses.textPrimary} ${themeClasses.hoverBg}`}
-                  >
-                    Dapatkan API Key
-                  </a>
-                </div>
-                
-                <p className={`text-xs ${themeClasses.textTertiary}`}>
-                  API Key akan disimpan secara lokal di browser Anda.
-                </p>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* Ads removed */}
 
       {/* Header */}
       <div className={`${themeClasses.bgSecondary} ${themeClasses.border} p-4 flex items-center justify-between sticky top-0 z-10 shadow-sm relative`}>
         <div />
+        {/* Floating modern button group */}
         <div className={`absolute right-4 top-3 flex items-center space-x-2 rounded-full p-1 shadow-lg backdrop-blur-sm ${themeClasses.cardBg} ${themeClasses.border}`}>
           <button 
             onClick={toggleDarkMode}
@@ -665,17 +652,11 @@ const ChatBot = () => {
             <FiPlus size={16} className={themeClasses.textPrimary} />
           </button>
 
-          <button
-            onClick={() => setShowApiKeyInput(true)}
-            className={`p-2 rounded-full transition-colors ${themeClasses.hoverBg}`}
-            title="Kelola API Key"
-          >
-            <FiSettings size={16} className={themeClasses.textPrimary} />
-          </button>
+          {/* Settings button intentionally removed per user's request */}
         </div>
       </div>
 
-      {/* Chat History Panel */}
+      {/* Chat History Panel - modernized */}
       {showChatHistory && (
         <motion.div
           initial={{ opacity: 0, x: -12 }}
@@ -711,11 +692,11 @@ const ChatBot = () => {
           </div>
 
           <div className="max-h-96 overflow-y-auto scrollbar-thin text-sm p-2 space-y-2">
-            {chatRooms.filter(r => r.name.toLowerCase().includes(roomQuery.toLowerCase())).length === 0 ? (
+            {chatRooms.filter(r => r.name.toLowerCase().includes(roomQuery.toLowerCase()) || (r.messages && r.messages.join && r.messages.join(' ').toLowerCase().includes(roomQuery.toLowerCase()))).length === 0 ? (
               <div className={`p-6 text-center rounded-lg ${themeClasses.bgTertiary} ${themeClasses.textTertiary}`}>Belum ada riwayat percakapan</div>
             ) : (
               chatRooms
-                .filter(r => r.name.toLowerCase().includes(roomQuery.toLowerCase()))
+                .filter(r => r.name.toLowerCase().includes(roomQuery.toLowerCase()) || (r.messages && typeof r.messages.join === 'function' ? r.messages.join(' ').toLowerCase().includes(roomQuery.toLowerCase()) : true))
                 .map((room) => (
                   <div
                     key={room.id}
@@ -730,15 +711,7 @@ const ChatBot = () => {
                         <p className={`font-medium text-sm ${themeClasses.textPrimary}`}>{room.name}</p>
                         <p className={`text-xs ${themeClasses.textTertiary}`}>{new Date(room.createdAt).toLocaleDateString('id-ID')}</p>
                       </div>
-                      <p className={`text-xs mt-1 truncate ${themeClasses.textTertiary}`}>
-                        {(() => {
-                          const roomMessages = localStorage.getItem(`roomMessages_${room.id}`);
-                          const messages = roomMessages ? JSON.parse(roomMessages) : [];
-                          return messages.length > 0 ? 
-                            messages[messages.length - 1].text.replace(/<[^>]*>?/gm, '').substring(0, 80) : 
-                            'Belum ada pesan';
-                        })()}
-                      </p>
+                      <p className={`text-xs mt-1 truncate ${themeClasses.textTertiary}`}>{room.messages && room.messages.length > 0 ? room.messages[room.messages.length - 1].text.replace(/<[^>]*>?/gm, '').substring(0, 80) : 'Belum ada pesan'}</p>
                     </div>
                     <div>
                       <button
@@ -785,8 +758,10 @@ const ChatBot = () => {
               transition={{ delay: 0.2, duration: 0.3 }}
               className="text-center mb-8 max-w-md text-sm"
             >
-              Asisten AI Anda yang siap membantu. Tanyakan apa saja!
+              Asisten AI Anda dengan memori otomatis. Tanyakan apa saja atau unggah file untuk dianalisis.
             </motion.p>
+            
+            {/* Template buttons removed */}
           </div>
         )}
 
@@ -811,6 +786,8 @@ const ChatBot = () => {
                   whileHover={{ scale: 1.01 }}
                   className={`${message.isBot ? `w-full max-w-full ${themeClasses.cardBg} ${themeClasses.border}` : 'max-w-[90%] md:max-w-[80%] bg-gradient-to-br from-purple-600 to-purple-500 text-white'} rounded-2xl p-4 shadow-xs`}
                 >
+                  {/* Profile removed from individual bot messages for a cleaner look */}
+                  
                   {message.file ? (
                     <div>
                       <p className={`text-xs mb-1 ${message.isBot ? themeClasses.textTertiary : 'text-blue-100'}`}>File: {message.file.name}</p>
@@ -835,6 +812,40 @@ const ChatBot = () => {
                     </>
                   )}
                   
+                  {/* Sources section */}
+                  {message.isBot && message.sources && message.sources.length > 0 && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      transition={{ duration: 0.3 }}
+                      className={`mt-3 pt-3 border-t ${themeClasses.border}`}
+                    >
+                      <p className="text-xs font-medium mb-2">Sumber:</p>
+                      <div className="space-y-2">
+                        {message.sources.map((source, index) => (
+                          <motion.div
+                            key={index}
+                            whileHover={{ x: 2 }}
+                            className="text-xs break-words"
+                          >
+                            <a 
+                              href={source.url} 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              className="text-blue-400 hover:underline flex items-center"
+                            >
+                              {source.title} <FiExternalLink className="ml-1" size={10} />
+                            </a>
+                            <p className="text-xs opacity-80 mt-1">{source.content}</p>
+                            {source.source && (
+                              <span className="text-xs text-gray-500">{source.source}</span>
+                            )}
+                          </motion.div>
+                        ))}
+                      </div>
+                    </motion.div>
+                  )}
+                  
                   <div className="flex items-center justify-between mt-2">
                     <span className={`text-xs ${message.isBot ? themeClasses.textTertiary : 'text-blue-100'}`}>
                       {message.time}
@@ -845,21 +856,24 @@ const ChatBot = () => {
                     
                     <div className="flex items-center space-x-2">
                       {message.isBot && (
-                        <button
-                          onClick={(e) => { e.stopPropagation(); copyToClipboard(message.text.replace(/<[^>]*>?/gm, ''), message.id); }}
-                          className="text-xs opacity-60 hover:opacity-100 transition-opacity"
-                          title="Salin ke clipboard"
-                        >
-                          {copiedMessageId === message.id ? (
-                            <FiCheck size={16} className="text-green-500" />
-                          ) : (
-                            <FiCopy size={16} />
-                          )}
-                        </button>
+                        <>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); copyToClipboard(message.text.replace(/<[^>]*>?/gm, ''), message.id); }}
+                            className="text-xs opacity-60 hover:opacity-100 transition-opacity"
+                            title="Salin ke clipboard"
+                          >
+                            {copiedMessageId === message.id ? (
+                              <FiCheck size={16} className="text-green-500" />
+                            ) : (
+                              <FiCopy size={16} />
+                            )}
+                          </button>
+                        </>
                       )}
                     </div>
                   </div>
 
+                  {/* Action buttons below bubble */}
                   {message.isBot && (
                     <div className="mt-3 flex items-center space-x-3">
                       <button onClick={(e) => { e.stopPropagation(); regenerateMessage(message); }} title="Regenerate" className="px-2 py-1 rounded-md text-sm bg-purple-50 hover:bg-purple-100">
@@ -874,12 +888,77 @@ const ChatBot = () => {
                       <button onClick={(e) => { e.stopPropagation(); replyToMessage(message); }} title="Reply to this" className="px-2 py-1 rounded-md text-sm bg-purple-50 hover:bg-purple-100">
                         <FiCornerUpLeft size={16} className="inline-block mr-1" /> Reply
                       </button>
+                      {/* Settings button removed for cleaner message UI */}
                     </div>
                   )}
+
+                    {/* Selection Toolbar */}
+                    {showSelectionToolbar && (
+                      <div className={`fixed bottom-28 right-8 rounded-lg p-2 shadow-lg flex items-center space-x-2 ${themeClasses.cardBg} ${themeClasses.border}`}>
+                        <button onClick={() => { navigator.clipboard.writeText(selectedText); setShowSelectionToolbar(false); }} className="px-3 py-1 rounded-md bg-purple-600 text-white">Copy</button>
+                        <button onClick={() => { setInputMessage(prev => prev + '\n> ' + selectedText); setShowSelectionToolbar(false); setInputFocused(true); textareaRef.current?.focus(); }} className={`px-3 py-1 rounded-md ${themeClasses.border}`}>Quote</button>
+                      </div>
+                    )}
+
+                    {/* Settings modal moved to main JSX to avoid per-message re-creation */}
                 </motion.div>
               </motion.div>
             ))}
           </AnimatePresence>
+          
+          {/* Processing indicators */}
+          {processingSources.length > 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3 }}
+              className={`${themeClasses.cardBg} ${themeClasses.border} rounded-xl p-4 max-w-[90%] md:max-w-[80%]`}
+            >
+              <div className="flex items-center mb-2">
+                <div className="w-6 h-6 rounded-full bg-gradient-to-br from-purple-500 to-purple-700 flex items-center justify-center mr-2 shadow">
+                  <span className="text-xs text-white">AI</span>
+                </div>
+                <span className="text-sm font-medium">Memproses</span>
+              </div>
+              
+              <div className="space-y-3 mt-3">
+                {processingSources.map((source) => (
+                  <motion.div
+                    key={source.id}
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ 
+                      opacity: 1, 
+                      x: 0,
+                      transition: { delay: 0.1 }
+                    }}
+                    className="flex items-center"
+                  >
+                    <motion.div
+                      animate={{
+                        scale: source.animation === 'pulse' ? [1, 1.1, 1] : [1, 1],
+                        x: source.animation === 'wave' ? [0, 2, -2, 0] : [0]
+                      }}
+                      transition={{
+                        duration: source.animation === 'pulse' ? 1 : 0.5,
+                        repeat: Infinity,
+                        ease: "easeInOut"
+                      }}
+                      className={`w-6 h-6 rounded-full flex items-center justify-center mr-3 ${source.completed ? 'bg-green-500' : 'bg-purple-500'}`}
+                    >
+                      {source.completed ? (
+                        <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                      ) : (
+                        source.icon
+                      )}
+                    </motion.div>
+                    <span className="text-sm">{source.text}</span>
+                  </motion.div>
+                ))}
+              </div>
+            </motion.div>
+          )}
           
           <div ref={messagesEndRef} />
         </div>
@@ -900,6 +979,8 @@ const ChatBot = () => {
           <FiChevronDown size={20} className="text-white" />
         </motion.button>
       )}
+
+      {/* Memory panel removed */}
 
       {/* Bottom Input Container */}
       <div className={`${themeClasses.border} ${themeClasses.bgSecondary} pt-3 pb-4 px-4`}>
@@ -954,8 +1035,11 @@ const ChatBot = () => {
           )}
         </AnimatePresence>
 
+        {/* Search / web-research UI removed */}
+
         {/* Modern Input Area */}
         <div className="relative mt-2">
+          {/* Reply preview bar (when replying to a message) */}
           {replyQuote && (
             <div className={`mb-2 p-2 rounded-lg border flex items-start justify-between ${themeClasses.bgTertiary} ${themeClasses.border}`}>
               <div className="flex-1 text-sm">
@@ -966,6 +1050,7 @@ const ChatBot = () => {
             </div>
           )}
           <div className={`modern-input ${themeClasses.inputBg} ${themeClasses.inputBorder} ${themeClasses.cardBg} rounded-2xl p-3 pr-4 shadow-lg transition-all duration-300 flex items-center space-x-3 ${inputFocused || inputMessage ? 'focused' : ''}`}>
+            {/* Attach (left) */}
             <motion.button
               onClick={() => setShowFileOptions(!showFileOptions)}
               className={`p-2 rounded-md transition-colors ${showFileOptions ? themeClasses.bgTertiary : themeClasses.hoverBg}`}
@@ -1000,6 +1085,7 @@ const ChatBot = () => {
               />
             </div>
 
+            {/* Send (right) */}
             {isBotTyping ? (
               <motion.button
                 onClick={stopGeneration}
@@ -1073,6 +1159,31 @@ const ChatBot = () => {
         </AnimatePresence>
       </div>
 
+      {/* Bottom ads removed */}
+
+      {/* Global Settings Modal (single instance) */}
+      <AnimatePresence>
+        {showSettings && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-black/40 flex items-center justify-center z-50" onClick={closeSettings}>
+            <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className={`${themeClasses.cardBg} rounded-xl p-6 max-w-md w-full shadow-2xl ${themeClasses.border}`} onClick={(e) => e.stopPropagation()}>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className={`text-lg font-semibold ${themeClasses.textPrimary}`}>Chat Settings</h3>
+                  <button onClick={closeSettings} className="p-1 rounded-md"><FiX /></button>
+                </div>
+                <div className="space-y-3">
+                  <div>
+                    <label className={`text-sm font-medium ${themeClasses.textPrimary}`}>Mode Copy</label>
+                    <p className={`text-xs ${themeClasses.textTertiary}`}>Pilih teks untuk menyalin otomatis atau fokus untuk menyalin jawaban</p>
+                  </div>
+                  <div className="flex justify-end">
+                    <button onClick={closeSettings} className={`px-4 py-2 rounded-md ${themeClasses.buttonBg} ${themeClasses.buttonText}`}>Simpan</button>
+                  </div>
+                </div>
+              </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Prism.js for syntax highlighting */}
       <link 
         id="prism-theme"
@@ -1091,6 +1202,7 @@ const ChatBot = () => {
       <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.24.1/plugins/line-numbers/prism-line-numbers.min.js"></script>
       
       <style jsx global>{`
+        /* Typing Dot */
         .typing-dot {
           display: inline-block;
           width: 8px;
@@ -1123,11 +1235,17 @@ const ChatBot = () => {
           display: inline-flex;
           align-items: center;
           justify-content: center;
+          /* stronger, slightly more rectangular shadow for prominence */
           box-shadow: 0 14px 40px rgba(99,102,241,0.12), 0 8px 24px rgba(76,29,149,0.08);
           border-radius: 10px;
           transition: transform 0.12s ease, box-shadow 0.18s ease;
         }
 
+        .typing-dot {
+          transition: transform 0.18s ease, opacity 0.18s ease;
+        }
+
+        /* Code Container */
         .code-container {
           background: ${darkMode ? '#1e293b' : '#f8fafc'};
           border-radius: 12px;
@@ -1214,6 +1332,7 @@ const ChatBot = () => {
           font-variant-ligatures: contextual;
         }
 
+        /* Notification */
         .copy-notification {
           position: fixed;
           bottom: 24px;
@@ -1239,6 +1358,7 @@ const ChatBot = () => {
           to { opacity: 0; }
         }
 
+        /* Chat bubbles */
         .chat-bubble {
           padding: 12px 16px;
           margin-bottom: 16px;
@@ -1277,6 +1397,7 @@ const ChatBot = () => {
           }
         }
 
+        /* Prose styling for messages */
         .prose {
           max-width: 100%;
           font-size: 0.95rem;
@@ -1312,7 +1433,7 @@ const ChatBot = () => {
         }
 
         .prose a {
-          color: #6b21a8;
+          color: #6b21a8; /* purple */
           text-decoration: none;
           transition: all 0.2s ease;
           border-bottom: 1px solid transparent;
@@ -1323,12 +1444,15 @@ const ChatBot = () => {
           border-bottom-color: currentColor;
         }
 
+        /* Modern input styles */
         .modern-input {
           position: relative;
           border: 1px solid var(--tw-border-opacity, 1);
+          /* background is controlled via themeClasses inputBg/cardBg */
         }
 
         .modern-input.focused {
+          /* lift the input and give a more vivid purple focus to match the new button presence */
           box-shadow: 0 16px 48px rgba(20,23,40,0.10), 0 10px 28px rgba(99,102,241,0.08);
           transform: translateY(-2px);
           border-color: rgba(99,102,241,0.95);
@@ -1347,13 +1471,16 @@ const ChatBot = () => {
         }
 
         .floating-label.active {
+          /* lift the label up and fade it out while focused/when there is text */
           transform: translateY(-18px) scale(0.82);
-          color: #7c3aed;
+          color: #7c3aed; /* subtle purple accent when active */
           top: 2px;
           opacity: 0;
           visibility: hidden;
           pointer-events: none;
         }
+
+        /* send button visual handled by themeClasses; disabled state handled inline */
 
         .prose img {
           max-width: 100%;
